@@ -42,11 +42,11 @@ public class SettingsActivity extends Activity {
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final Locale ID = new Locale("id", "ID");
     static final String EXTRA_TAB = "tab";
-    static final int TAB_LAUNCHER = 0, TAB_POWER = 1, TAB_AI = 2;
+    static final int TAB_LAUNCHER = 0, TAB_POWER = 1, TAB_THEME = 2;
     static final String[][] TABS = {
             {"LAUNCHER", "TAMPILAN & PINTASAN"},
             {"HEMAT DAYA", "APLIKASI DI LATAR"},
-            {"ASISTEN AI", "PROFIL & SUARA"},
+            {"TEMA", "AKSEN & WARNA"},
     };
 
     float dp, sp, wDp, hDp, railDp;
@@ -167,13 +167,34 @@ public class SettingsActivity extends Activity {
         if (tab == TAB_POWER) {
             power = new PowerPanel(this);
             v = power.view;
-        } else if (tab == TAB_AI) {
-            ai = new AiPanel(this);
-            v = ai.view;
+        } else if (tab == TAB_THEME) {
+            v = themePanel();
         } else {
             v = launcherPanel();
         }
         content.addView(v, MATCH, MATCH);
+    }
+
+    View themePanel() {
+        ScrollView sv = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(px(28), px(20), px(28), px(28));
+        int cur = prefs.getInt("themeAccent", 0xFFFFB000);
+        String[] names = {"Orange / Amber", "Biru", "Hijau", "Merah", "Ungu"};
+        int[] cols = {0xFFFFB000, 0xFF38BDF8, 0xFF34D399, 0xFFFB7185, 0xFFA78BFA};
+        for (int i = 0; i < names.length; i++) {
+            final int col = cols[i];
+            boolean active = (cur == col);
+            list.addView(row(names[i].toUpperCase(java.util.Locale.US),
+                    "Tema hitam dengan aksen " + names[i] + ".",
+                    key(active ? "AKTIF" : "PILIH", active, () -> {
+                        prefs.edit().putInt("themeAccent", col).apply();
+                        show(TAB_THEME, true);
+                    })));
+        }
+        sv.addView(list);
+        return sv;
     }
 
     // ---------------------------------------------------------------- tab Launcher
@@ -276,9 +297,8 @@ public class SettingsActivity extends Activity {
                 updateKey));
 
         list.addView(row("TENTANG",
-                "KERE-HORE " + ver + " — launcher ringan untuk headunit Android. Sumber terbuka (MIT) di "
-                        + "KERE-HORE v2.0 — Launcher ringan HU Android kere-hore.\n"
-                        + "Sumber terbuka: github.com/ardith666/kere-hore."));
+                "KERE-HORE " + ver + " — Launcher ringan HU Android kere-hore.\n"
+                        + "Sumber terbuka: github.com/ardith666/kere-hore"));
         return scroll(list);
     }
 

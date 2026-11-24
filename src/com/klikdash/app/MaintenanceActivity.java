@@ -61,6 +61,14 @@ public class MaintenanceActivity extends Activity {
         btnLabel.setOnClickListener(v -> showLabelDialog());
         header.addView(btnLabel);
 
+        Button btnSwot = makeBtn("SWOT", "#D97706");
+        btnSwot.setOnClickListener(v -> showSwotDialog());
+        header.addView(btnSwot);
+
+        Button btnGps = makeBtn("GPS", "#0D9488");
+        btnGps.setOnClickListener(v -> showGpsDialog());
+        header.addView(btnGps);
+
         serverBtn = makeBtn("Aktifkan Server", "#7C3AED");
         serverBtn.setOnClickListener(v -> toggleServer());
         header.addView(serverBtn);
@@ -68,9 +76,10 @@ public class MaintenanceActivity extends Activity {
         root.addView(header);
 
         kmSummaryView = new TextView(this);
-        kmSummaryView.setTextColor(Color.parseColor("#94A3B8"));
-        kmSummaryView.setTextSize(14);
-        kmSummaryView.setPadding(0, 8, 0, 12);
+        kmSummaryView.setTextColor(Color.parseColor("#38BDF8"));
+        kmSummaryView.setTextSize(18);
+        kmSummaryView.setTypeface(null, android.graphics.Typeface.BOLD);
+        kmSummaryView.setPadding(0, 8, 0, 14);
         root.addView(kmSummaryView);
 
         // Main content: left = list, right = QR panel
@@ -104,7 +113,9 @@ public class MaintenanceActivity extends Activity {
 
         setContentView(root);
         refreshList();
-        showKmDialog();
+        if (MaintenanceStore.load(this).optInt("currentKm", 0) == 0) {
+            showKmDialog();
+        }
     }
 
     @Override
@@ -147,7 +158,7 @@ public class MaintenanceActivity extends Activity {
         int curKm = data.optInt("currentKm", 0);
         String lbl = data.optString("customLabel", MaintenanceStore.DEFAULT_LABEL);
         boolean wEnabled = data.optBoolean("widgetEnabled", true);
-        kmSummaryView.setText("KM Saat Ini: " + curKm + " km  |  Inisial: " + lbl + "  |  Widget Home: " + (wEnabled ? "Aktif" : "Mati"));
+        kmSummaryView.setText("KM Saat Ini: " + MaintenanceStore.fmtKm(curKm) + " km   |   Inisial: " + lbl + "   |   Widget: " + (wEnabled ? "Aktif" : "Mati"));
 
         listLayout.removeAllViews();
         JSONArray parts = data.optJSONArray("parts");
@@ -157,7 +168,7 @@ public class MaintenanceActivity extends Activity {
             JSONObject p = parts.optJSONObject(i);
             if (p == null) continue;
             int lastKm = p.optInt("lastKm", 0);
-            int targetKm = p.optInt("targetKm", 0);
+            int targetKm = MaintenanceStore.effectiveTargetKm(p);
             int rem = targetKm - curKm;
 
             LinearLayout card = new LinearLayout(this);
@@ -184,10 +195,10 @@ public class MaintenanceActivity extends Activity {
             String type = p.optString("type", "");
             int price = p.optInt("price", 0);
             if (!brand.isEmpty() || !type.isEmpty()) extra += " | " + (brand + " " + type).trim();
-            if (price > 0) extra += " | Rp" + price;
+            if (price > 0) extra += " | Rp" + MaintenanceStore.fmtKm(price);
 
             TextView tvSub = new TextView(this);
-            tvSub.setText("Terakhir: " + lastKm + " km -> Target: " + targetKm + " km" + extra);
+            tvSub.setText("Terakhir: " + MaintenanceStore.fmtKm(lastKm) + " km -> Target: " + MaintenanceStore.fmtKm(targetKm) + " km" + extra);
             tvSub.setTextColor(Color.parseColor("#94A3B8"));
             tvSub.setTextSize(12);
             info.addView(tvSub);
@@ -195,7 +206,7 @@ public class MaintenanceActivity extends Activity {
             card.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView tvRem = new TextView(this);
-            tvRem.setText("Sisa " + rem + " km");
+            tvRem.setText("Sisa " + MaintenanceStore.fmtKm(rem) + " km");
             tvRem.setTextColor(rem <= 0 ? Color.parseColor("#FB7185") : (rem <= 1000 ? Color.parseColor("#FBBF24") : Color.parseColor("#34D399")));
             tvRem.setTextSize(14);
             tvRem.setPadding(12, 0, 16, 0);
@@ -328,6 +339,78 @@ public class MaintenanceActivity extends Activity {
             dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
         dlg.show();
+    }
+
+    private void showSwotDialog() {
+        JSONObject data = MaintenanceStore.load(this);
+        int cur = data.optInt("currentKm", 0);
+        JSONArray parts = data.optJSONArray("parts");
+        int total = parts == null ? 0 : parts.length();
+        StringBuilder crit = new StringBuilder();
+        StringBuilder warn = new StringBuilder();
+        if (parts != null) {
+            for (int i = 0; i < parts.length(); i++) {
+                JSONObject p = parts.optJSONObject(i);
+                if (p == null) continue;
+                int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
+                if (rem <= 0) {
+                    if (crit.length() > 0) crit.append(", ");
+                    crit.append(p.optString("name", ""));
+                } else if (rem <= 1000) {
+                    if (warn.length() > 0) warn.append(", ");
+                    warn.append(p.optString("name", ""));
+                }
+            }
+        }
+        String msg = "STRENGTHS:\n• " + total + " komponen terpantau aktif.\n\n"
+            + "WEAKNESSES:\n• " + (warn.length() > 0 ? "Mendekati jadwal: " + warn : "Tidak ada part mendekati batas.") + "\n\n"
+            + "OPPORTUNITIES:\n• Jadwalkan servis gabungan agar lebih hemat waktu & biaya.\n\n"
+            + "THREATS:\n• " + (crit.length() > 0 ? "SEGERA GANTI: " + crit : "Semua komponen masih dalam batas aman.");
+        new AlertDialog.Builder(this)
+            .setTitle("Analisis SWOT & Insight")
+            .setMessage(msg)
+            .setPositiveButton("Tutup", null)
+            .show();
+    }
+
+    private void showGpsDialog() {
+        JSONArray arr = TripLogger.load(this);
+        StringBuilder sb = new StringBuilder();
+        if (arr.length() == 0) {
+            sb.append("Belum ada catatan perjalanan GPS.");
+        } else {
+            for (int i = arr.length() - 1; i >= Math.max(0, arr.length() - 50); i--) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null) continue;
+                sb.append(o.optString("ts", ""))
+                  .append("  |  ").append(o.optInt("kmh", 0)).append(" km/j")
+                  .append("\n").append(o.optDouble("lat", 0)).append(", ").append(o.optDouble("lon", 0))
+                  .append("\n\n");
+            }
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("History GPS (" + arr.length() + " titik | " + TripLogger.getStorageSizeText(this) + ")")
+            .setMessage(sb.toString())
+            .setPositiveButton("Tutup", null)
+            .setNeutralButton("Bersihkan", (d, w) -> {
+                AlertDialog cd = new AlertDialog.Builder(this)
+                    .setTitle("Hapus Semua History GPS?")
+                    .setMessage("PERINGATAN: Data yang dihapus tidak dapat dikembalikan!\n\nTunggu 10 detik sebelum menghapus.")
+                    .setPositiveButton("Hapus (10)", (d2, w2) -> {
+                        TripLogger.clear(this);
+                        Toast.makeText(this, "History GPS dibersihkan", Toast.LENGTH_SHORT).show();
+                    })
+                    .setNegativeButton("Batal", null)
+                    .create();
+                cd.show();
+                final android.widget.Button btn = cd.getButton(AlertDialog.BUTTON_POSITIVE);
+                btn.setEnabled(false);
+                new android.os.CountDownTimer(10000, 1000) {
+                    @Override public void onTick(long ms) { btn.setText("Hapus (" + (ms / 1000 + 1) + ")"); }
+                    @Override public void onFinish() { btn.setEnabled(true); btn.setText("Ya, Hapus Permanen"); }
+                }.start();
+            })
+            .show();
     }
 
     private int parseInt(String s, int def) {

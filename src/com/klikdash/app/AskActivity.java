@@ -143,7 +143,7 @@ public class AskActivity extends Activity {
             heard.setText("Tambahkan API key Claude atau OpenAI-compatible di Pengaturan › Asisten AI.");
             again.setLabel("ATUR AI");
             again.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)
-                    .putExtra(SettingsActivity.EXTRA_TAB, SettingsActivity.TAB_AI)));
+                    .putExtra(SettingsActivity.EXTRA_TAB, SettingsActivity.TAB_LAUNCHER)));
             again.setVisibility(View.VISIBLE);
             return;
         }

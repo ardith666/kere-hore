@@ -85,8 +85,8 @@ public final class MaintenanceStore {
             if (p != null && p.optInt("targetKm", 0) > 0) list.add(p);
         }
         java.util.Collections.sort(list, (a, b) -> {
-            int ra = a.optInt("targetKm", 0) - cur;
-            int rb = b.optInt("targetKm", 0) - cur;
+            int ra = effectiveTargetKm(a) - cur;
+            int rb = effectiveTargetKm(b) - cur;
             return Integer.compare(ra, rb);
         });
         return list.size() > maxCount ? list.subList(0, maxCount) : list;
@@ -101,6 +101,17 @@ public final class MaintenanceStore {
         return load(ctx).optBoolean("widgetEnabled", true);
     }
 
+    public static int effectiveTargetKm(JSONObject p) {
+        int last = p.optInt("lastKm", 0);
+        int target = p.optInt("targetKm", 0);
+        if (target > 0 && target < last) return last + target;
+        return target;
+    }
+
+    public static String fmtKm(int km) {
+        return String.format(java.util.Locale.GERMAN, "%,d", km);
+    }
+
     public static JSONObject getMostUrgentPart(Context ctx) {
         JSONObject data = load(ctx);
         int currentKm = data.optInt("currentKm", 0);
@@ -111,7 +122,7 @@ public final class MaintenanceStore {
         for (int i = 0; i < parts.length(); i++) {
             JSONObject p = parts.optJSONObject(i);
             if (p == null) continue;
-            int target = p.optInt("targetKm", 0);
+            int target = effectiveTargetKm(p);
             if (target <= 0) continue;
             int rem = target - currentKm;
             if (rem < minRem) {

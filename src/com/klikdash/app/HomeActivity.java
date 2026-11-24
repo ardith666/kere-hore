@@ -208,7 +208,7 @@ public class HomeActivity extends Activity {
         }
         if (c > 1000) c = Math.round(c / 1000f); // sensor melaporkan mili-derajat
         temp.setText(c >= 85 ? "CPU " + c + "°C · PANAS" : "CPU " + c + "°C");
-        temp.setTextColor(c >= 85 ? HOT : c >= 70 ? AMBER : DIM);
+        temp.setTextColor(c >= 85 ? HOT : c >= 70 ? accentColor : DIM);
     }
     Gauge gauge;
     PrayerView prayerView;
@@ -340,6 +340,7 @@ public class HomeActivity extends Activity {
         loadLocation();
 
         FrameLayout root = new FrameLayout(this);
+        accentColor = prefs.getInt("themeAccent", AMBER);
         root.setBackgroundColor(BG);
         root.setFitsSystemWindows(true);
         measureScreen();
@@ -400,7 +401,8 @@ public class HomeActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshMaintenanceOverlay();
-        if (prefs.getBoolean("speedometer", false) != speedGaugeEnabled) {
+        if (prefs.getBoolean("speedometer", false) != speedGaugeEnabled
+                || prefs.getInt("themeAccent", AMBER) != accentColor) {
             recreate();
             return;
         }
@@ -472,7 +474,7 @@ public class HomeActivity extends Activity {
             lastKmhAt = speedAt;
             if (!speedGaugeEnabled && speed != null) {
                 speed.setText(String.valueOf(kmh));
-                speed.setTextColor(kmh > 100 ? AMBER : TEXT); // di atas batas tol
+                speed.setTextColor(kmh > 100 ? accentColor : TEXT); // di atas batas tol
             }
         if (speedGaugeEnabled && speedGauge != null) {
             final int k = kmh;
@@ -677,6 +679,7 @@ public class HomeActivity extends Activity {
     BtWidget btWidget;
     /** Sesi A2DP dari com.android.bluetooth; jalur cadangan bila broadcast BT firmware tidak ada. */
     MediaController btCtrl;
+    private int accentColor = AMBER;
     private TextView topTagView;
     private TextView maintWidgetView;
 
@@ -704,9 +707,9 @@ public class HomeActivity extends Activity {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < parts.size(); i++) {
                 org.json.JSONObject p = parts.get(i);
-                int rem = p.optInt("targetKm", 0) - cur;
+                int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
                 if (i > 0) sb.append("\n");
-                sb.append("• ").append(p.optString("name", "Part")).append(" (Sisa ").append(rem).append(" km)");
+                sb.append("• ").append(p.optString("name", "Part")).append(" (Sisa ").append(MaintenanceStore.fmtKm(rem)).append(" km)");
             }
             maintWidgetView.setText(sb.toString());
             maintWidgetView.setVisibility(View.VISIBLE);
@@ -1281,7 +1284,7 @@ public class HomeActivity extends Activity {
         brl.bottomMargin = px(22);
 
         View bar = new View(this);
-        bar.setBackgroundColor(AMBER);
+        bar.setBackgroundColor(accentColor);
         barRow.addView(bar, new LinearLayout.LayoutParams(px(84), px(6)));
 
         LinearLayout volBox = new LinearLayout(this);
@@ -1294,7 +1297,7 @@ public class HomeActivity extends Activity {
         int vIconSz = px(22);
         volBox.addView(volumeIcon, new LinearLayout.LayoutParams(vIconSz, vIconSz));
 
-        volumeText = text(readVolume(), fMonoBold, 18, AMBER);
+        volumeText = text(readVolume(), fMonoBold, 18, accentColor);
         volumeText.setPadding(px(8), 0, 0, 0);
         volBox.addView(volumeText);
 
@@ -1304,7 +1307,7 @@ public class HomeActivity extends Activity {
         left.addView(barRow, brl);
         updateVolume();
 
-        day = text("", fMonoBold, 18, AMBER);
+        day = text("", fMonoBold, 18, accentColor);
         day.setLetterSpacing(0.3f);
         left.addView(day);
 
@@ -1438,7 +1441,7 @@ public class HomeActivity extends Activity {
         boolean narrow = wDp < 1000;
         drawerTitle = text("SEMUA APLIKASI", fHeavy, narrow ? 30 : 40, TEXT);
         head.addView(drawerTitle);
-        drawerCount = text("", fMono, 13, AMBER);
+        drawerCount = text("", fMono, 13, accentColor);
         drawerCount.setLetterSpacing(0.2f);
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
         cl.leftMargin = px(20);
@@ -1567,7 +1570,7 @@ public class HomeActivity extends Activity {
             title.setTypeface(fHeavy);
             title.setTextSize(sp(17));
             title.setFakeBoldText(true);
-            title.setColor(AMBER);
+            title.setColor(accentColor);
             title.setTextAlign(Paint.Align.CENTER);
 
             sub.setTypeface(fMonoBold);
@@ -1803,11 +1806,11 @@ public class HomeActivity extends Activity {
                 float tx = cx + cs + px(14);
                 float ty = cy + px(20);
                 CharSequence t = TextUtils.ellipsize(track.isEmpty() ? "BT MUSIC" : track, title, w - tx - px(150), TextUtils.TruncateAt.END);
-                title.setColor(track.isEmpty() ? FAINT : AMBER);
+                title.setColor(track.isEmpty() ? FAINT : accentColor);
                 c.drawText(t, 0, t.length(), tx, ty, title);
                 String a = artist.isEmpty() ? (track.isEmpty() ? "HUBUNGKAN PONSEL" : "") : artist;
                 CharSequence as = TextUtils.ellipsize(a, sub, w - tx - px(150), TextUtils.TruncateAt.END);
-                sub.setColor(artist.isEmpty() ? DIM : AMBER);
+                sub.setColor(artist.isEmpty() ? DIM : accentColor);
                 c.drawText(as, 0, as.length(), tx, ty + px(18), sub);
 
                 int bw = px(64), bh = px(44);
@@ -1826,7 +1829,7 @@ public class HomeActivity extends Activity {
             }
 
             // --- Top tag bar ---
-            tagPaint.setColor(AMBER);
+            tagPaint.setColor(accentColor);
             tagPaint.setTextAlign(Paint.Align.LEFT);
             c.drawText("01  MUSIK", pad, pad + tagPaint.getTextSize(), tagPaint);
 
@@ -1883,7 +1886,7 @@ public class HomeActivity extends Activity {
 
             float ty = cy + cs + px(20);
             CharSequence t = TextUtils.ellipsize(track.isEmpty() ? "BLUETOOTH AUDIO" : track, title, w - pad * 2, TextUtils.TruncateAt.END);
-            title.setColor(track.isEmpty() ? FAINT : AMBER);
+            title.setColor(track.isEmpty() ? FAINT : accentColor);
             c.drawText(t, 0, t.length(), w / 2f, ty, title);
 
             String a = artist.isEmpty() ? (track.isEmpty() ? "KETUK UNTUK MEMBUKA" : "") : artist;
@@ -1894,11 +1897,11 @@ public class HomeActivity extends Activity {
 
         void key(Canvas c, Rect r, int kind, boolean on) {
             knob.setStyle(Paint.Style.FILL);
-            knob.setColor(on ? AMBER : (kind == 1 || kind == 3 ? 0xFF1C1C1C : 0xFF161616));
+            knob.setColor(on ? accentColor : (kind == 1 || kind == 3 ? 0xFF1C1C1C : 0xFF161616));
             c.drawRect(r, knob);
-            frame.setColor(on ? AMBER : LINE);
+            frame.setColor(on ? accentColor : LINE);
             c.drawRect(r, frame);
-            knob.setColor(on ? INK : (track.isEmpty() ? FAINT : (kind == 1 || kind == 3 ? AMBER : TEXT)));
+            knob.setColor(on ? INK : (track.isEmpty() ? FAINT : (kind == 1 || kind == 3 ? accentColor : TEXT)));
             float x = r.exactCenterX(), y = r.exactCenterY();
             float a = px(7), b = px(9);
             Path p = new Path();
@@ -2017,7 +2020,7 @@ public class HomeActivity extends Activity {
 
         VolumeIcon() {
             super(HomeActivity.this);
-            p.setColor(AMBER);
+            p.setColor(accentColor);
             p.setStrokeWidth(Math.max(1.5f, dp * 1.5f));
             p.setStrokeCap(Paint.Cap.ROUND);
         }
@@ -2110,7 +2113,7 @@ public class HomeActivity extends Activity {
             c.drawRect(0.5f, 0.5f, w - 0.5f, h - 0.5f, frame);
 
             big.setTextSize(Math.min(h * 0.52f, sp(38)));
-            int color = !fix || kmh < 1 ? FAINT : kmh > 100 ? AMBER : TEXT;
+            int color = !fix || kmh < 1 ? FAINT : kmh > 100 ? accentColor : TEXT;
             big.setColor(color);
             c.drawText(fix ? String.valueOf(kmh) : "--", w / 2f, h * 0.58f, big);
 
@@ -2125,7 +2128,7 @@ public class HomeActivity extends Activity {
             if (fix && kmh > 0) {
                 float f = Math.min(1f, kmh / 140f);
                 int fy = bb - Math.round((bb - bt) * f);
-                bar.setColor(kmh > 100 ? AMBER : TEXT);
+                bar.setColor(kmh > 100 ? accentColor : TEXT);
                 c.drawRoundRect(new RectF(bx, fy, bx + bw, bb), px(1), px(1), bar);
             }
         }
@@ -2167,7 +2170,7 @@ public class HomeActivity extends Activity {
 
         void drawFrame(Canvas c) {
             int w = getWidth(), h = getHeight();
-            fill.setColor(down ? AMBER : PANEL);
+            fill.setColor(down ? accentColor : PANEL);
             c.drawRect(0, 0, w, h, fill);
             if (!down) {
                 float s = stroke.getStrokeWidth() / 2f;
@@ -2242,7 +2245,7 @@ public class HomeActivity extends Activity {
                 c.drawRect(0, 0, w, h, fill);
             }
             if (target) {
-                fill.setColor(AMBER);
+                fill.setColor(accentColor);
                 int t = px(3);
                 c.drawRect(0, 0, w, t, fill);
                 c.drawRect(0, h - t, w, h, fill);
@@ -2260,7 +2263,7 @@ public class HomeActivity extends Activity {
             boolean all = idx == SLOTS;
             App a = all ? null : appFor(idx);
 
-            small.setColor(down ? INK : (idx < cols ? AMBER : DIM));
+            small.setColor(down ? INK : (idx < cols ? accentColor : DIM));
             c.drawText(String.format(Locale.US, "%02d", idx + 1), m, m + small.getTextSize(), small);
 
             int icon = Math.round(px(60) * k);
@@ -2270,7 +2273,7 @@ public class HomeActivity extends Activity {
                 dot.setColor(down ? INK : TEXT);
                 for (int i = 0; i < 9; i++) {
                     int x = x0 + (i % 3) * (cell + g), y = m + (i / 3) * (cell + g);
-                    if (i == 4 && !down) dot.setColor(AMBER);
+                    if (i == 4 && !down) dot.setColor(accentColor);
                     c.drawRect(x, y, x + cell, y + cell, dot);
                     if (i == 4) dot.setColor(down ? INK : TEXT);
                 }
@@ -2336,7 +2339,7 @@ public class HomeActivity extends Activity {
 
         @Override protected void onDraw(Canvas c) {
             if (accent) {
-                fill.setColor(down ? TEXT : AMBER);
+                fill.setColor(down ? TEXT : accentColor);
                 c.drawRect(0, 0, getWidth(), getHeight(), fill);
             } else {
                 drawFrame(c);
@@ -2408,12 +2411,12 @@ public class HomeActivity extends Activity {
             for (int hr = 0; hr <= 24; hr++) {
                 float x = x0 + w * hr / 24f;
                 boolean major = hr % 6 == 0;
-                line.setColor(x <= now ? AMBER : FAINT);
+                line.setColor(x <= now ? accentColor : FAINT);
                 c.drawLine(x, base - (major ? px(14) : px(7)), x, base, line);
             }
             line.setColor(FAINT);
             c.drawLine(x0, base, x0 + w, base, line);
-            line.setColor(AMBER);
+            line.setColor(accentColor);
             line.setStrokeWidth(px(3));
             c.drawLine(x0, base, now, base, line);
 
@@ -2433,7 +2436,7 @@ public class HomeActivity extends Activity {
                 line.setStyle(Paint.Style.FILL);
                 for (int i = 0; i < pray.length; i++) {
                     float x = x0 + w * pray[i] / 1440f;
-                    line.setColor(i == next ? AMBER : TEXT);
+                    line.setColor(i == next ? accentColor : TEXT);
                     needle.rewind();
                     needle.moveTo(x, cy - r);
                     needle.lineTo(x + r, cy);
@@ -2505,9 +2508,9 @@ public class HomeActivity extends Activity {
             time.setTextSize(Math.min(sp(30), col * 0.4f));
             for (int i = 0; i < pray.length; i++) {
                 float x = i * col;
-                int color = i == next ? AMBER : pray[i] <= now ? DIM : TEXT;
-                if (i == next) c.drawRect(x, px(1), x + px(28), px(4), paintOf(AMBER));
-                name.setColor(i == next ? AMBER : DIM);
+                int color = i == next ? accentColor : pray[i] <= now ? DIM : TEXT;
+                if (i == next) c.drawRect(x, px(1), x + px(28), px(4), paintOf(accentColor));
+                name.setColor(i == next ? accentColor : DIM);
                 c.drawText(PrayerTimes.NAMES[i], x, px(28), name);
                 time.setColor(color);
                 c.drawText(String.format(Locale.US, "%02d:%02d", pray[i] / 60, pray[i] % 60), x, px(64), time);
@@ -2517,7 +2520,7 @@ public class HomeActivity extends Activity {
             int left = (target - now) * 60 - cal.get(Calendar.SECOND); // detik tersisa
             String wait = String.format(Locale.US, "%02d:%02d:%02d", left / 3600, left / 60 % 60, left % 60);
             String msg = "▸ " + PrayerTimes.NAMES[next >= 0 ? next : 0] + " DALAM " + wait;
-            info.setColor(AMBER);
+            info.setColor(accentColor);
             info.setTextAlign(Paint.Align.LEFT);
             c.drawText(msg, 0, px(96), info);
 
