@@ -687,6 +687,7 @@ public class HomeActivity extends Activity {
     private void refreshMaintenanceOverlay() {
         if (topTagView != null) {
             topTagView.setText(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US));
+            topTagView.setTextColor(prefs.getInt("themeAccent", AMBER));
         }
         if (maintWidgetView != null) {
             if (!MaintenanceStore.isWidgetEnabled(this)) {
@@ -1166,7 +1167,7 @@ public class HomeActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView tag = text(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US), fMonoBold, 12, AMBER);
+        TextView tag = text(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US), fMonoBold, 12, prefs.getInt("themeAccent", AMBER));
         tag.setLetterSpacing(0.25f);
         tag.setOnClickListener(v -> startActivity(new Intent(this, MaintenanceActivity.class)));
         topTagView = tag;

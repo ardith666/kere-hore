@@ -219,6 +219,25 @@ public class SettingsActivity extends Activity {
                     show(TAB_LAUNCHER, true);
                 })));
 
+        int curAccent = prefs.getInt("themeAccent", 0xFFFFB000);
+        String accentName = curAccent == 0xFF38BDF8 ? "BIRU"
+                : curAccent == 0xFF34D399 ? "HIJAU"
+                : curAccent == 0xFFFB7185 ? "MERAH"
+                : curAccent == 0xFFA78BFA ? "UNGU" : "ORANGE";
+        list.addView(row("WARNA AKSEN TEMA",
+                "Ubah warna aksen launcher (hitam dengan aksen pilihan).",
+                key(accentName, true, () -> {
+                    String[] names = {"Orange / Amber", "Biru", "Hijau", "Merah", "Ungu"};
+                    int[] cols = {0xFFFFB000, 0xFF38BDF8, 0xFF34D399, 0xFFFB7185, 0xFFA78BFA};
+                    new AlertDialog.Builder(this)
+                        .setTitle("Pilih Warna Aksen")
+                        .setItems(names, (d, w) -> {
+                            prefs.edit().putInt("themeAccent", cols[w]).apply();
+                            show(TAB_LAUNCHER, true);
+                        })
+                        .show();
+                })));
+
         int off = prefs.getInt("hijriOffset", 0);
         Key[] shift = new Key[5];
         for (int i = 0; i < 5; i++) {
@@ -259,7 +278,7 @@ public class SettingsActivity extends Activity {
         list.addView(row("TENTANG",
                 "KERE-HORE " + ver + " — launcher ringan untuk headunit Android. Sumber terbuka (MIT) di "
                         + "KERE-HORE v2.0 — Launcher ringan HU Android kere-hore.\n"
-                        + "Sumber terbuka: github.com/ardith666/klikdash."));
+                        + "Sumber terbuka: github.com/ardith666/kere-hore."));
         return scroll(list);
     }
 
