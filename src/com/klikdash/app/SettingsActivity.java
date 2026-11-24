@@ -34,7 +34,7 @@ import static com.klikdash.app.HomeActivity.PANEL;
 import static com.klikdash.app.HomeActivity.TEXT;
 
 /**
- * Pengaturan KlikDash dalam tab: Launcher (tampilan utama, Hijriah, ubin), Hemat Daya, dan Asisten AI.
+ * Pengaturan KERE-HORE dalam tab: Launcher (tampilan utama, Hijriah, ubin), Hemat Daya, dan Asisten AI.
  * Tab di kiri pada layar mendatar, di atas pada layar tegak.
  */
 public class SettingsActivity extends Activity {
@@ -183,9 +183,9 @@ public class SettingsActivity extends Activity {
 
         boolean def = HomeSwitch.isDefault(this);
         list.addView(row("TAMPILAN UTAMA",
-                def ? "KlikDash sedang menjadi tampilan utama headunit. Kembali ke launcher bawaan kapan saja; KlikDash "
+                def ? "KERE-HORE sedang menjadi tampilan utama headunit. Kembali ke launcher bawaan kapan saja; KERE-HORE "
                         + "tetap terpasang."
-                        : "Launcher bawaan masih menjadi tampilan utama. Jadikan KlikDash tampilan utama agar muncul "
+                        : "Launcher bawaan masih menjadi tampilan utama. Jadikan KERE-HORE tampilan utama agar muncul "
                         + "setiap headunit menyala.",
                 def ? key("LAUNCHER BAWAAN", false, () -> HomeSwitch.restore(this, prefs))
                         : key("JADIKAN UTAMA", true, () -> HomeSwitch.makeDefault(this, prefs,
@@ -207,6 +207,18 @@ public class SettingsActivity extends Activity {
                     show(TAB_LAUNCHER, true);
                 })));
 
+        boolean maintW = MaintenanceStore.isWidgetEnabled(this);
+        list.addView(row("WIDGET SERVIS / MOVING PART",
+                "Tampilkan ringkasan jadwal servis terdekat di bawah jam/GPS pada halaman utama.",
+                key(maintW ? "AKTIF" : "NONAKTIF", maintW, () -> {
+                    try {
+                        org.json.JSONObject d = MaintenanceStore.load(this);
+                        d.put("widgetEnabled", !maintW);
+                        MaintenanceStore.save(this, d);
+                    } catch (Throwable ignored) {}
+                    show(TAB_LAUNCHER, true);
+                })));
+
         int off = prefs.getInt("hijriOffset", 0);
         Key[] shift = new Key[5];
         for (int i = 0; i < 5; i++) {
@@ -224,7 +236,7 @@ public class SettingsActivity extends Activity {
 
         list.addView(row("PINTASAN HOME",
                 "Tekan lama pintasan di home untuk mengganti atau memindahkan aplikasinya. Atur ulang mengembalikan susunan "
-                        + "bawaan KlikDash.",
+                        + "bawaan KERE-HORE.",
                 key("ATUR ULANG", false, this::resetTiles)));
 
         list.addView(row("PENGATURAN SISTEM",
@@ -245,8 +257,9 @@ public class SettingsActivity extends Activity {
                 updateKey));
 
         list.addView(row("TENTANG",
-                "KlikDash " + ver + " — launcher ringan untuk headunit Android. Sumber terbuka (MIT) di "
-                        + "github.com/ashafizullah/klikdash."));
+                "KERE-HORE " + ver + " — launcher ringan untuk headunit Android. Sumber terbuka (MIT) di "
+                        + "KERE-HORE v2.0 — Launcher ringan HU Android kere-hore.\n"
+                        + "Sumber terbuka: github.com/ardith666/klikdash."));
         return scroll(list);
     }
 
@@ -295,13 +308,13 @@ public class SettingsActivity extends Activity {
                             .setPositiveButton("OK", null));
                 } else if (rel == null || Updater.compare(rel.version, cur) <= 0) {
                     show(TAB_LAUNCHER, true);
-                    android.widget.Toast.makeText(this, "KlikDash " + cur + " sudah versi terbaru",
+                    android.widget.Toast.makeText(this, "KERE-HORE " + cur + " sudah versi terbaru",
                             android.widget.Toast.LENGTH_LONG).show();
                 } else {
                     updateKey.setLabel("CEK UPDATE");
                     String notes = rel.notes.length() > 700 ? rel.notes.substring(0, 700) + "…" : rel.notes;
                     showDark(new AlertDialog.Builder(this)
-                            .setTitle("KlikDash " + rel.version + " tersedia")
+                            .setTitle("KERE-HORE " + rel.version + " tersedia")
                             .setMessage("Terpasang: " + cur + " · ukuran " + Math.max(1, rel.size / 1024) + " KB"
                                     + (notes.isEmpty() ? "" : "\n\n" + notes.replaceAll("[#*`]", "")))
                             .setNegativeButton("Nanti", null)
@@ -312,16 +325,16 @@ public class SettingsActivity extends Activity {
     }
 
     void downloadUpdate(Updater.Release rel) {
-        AlertDialog prog = showDark(new AlertDialog.Builder(this).setTitle("Mengunduh KlikDash " + rel.version)
+        AlertDialog prog = showDark(new AlertDialog.Builder(this).setTitle("Mengunduh KERE-HORE " + rel.version)
                 .setMessage("0%").setCancelable(false));
         new Thread(() -> {
             try {
                 java.io.File apk = Updater.download(this, rel, pct -> runOnUiThread(() -> prog.setMessage(pct + "%")));
                 runOnUiThread(() -> {
-                    prog.setMessage("Memasang… KlikDash akan tertutup sebentar lalu terbuka lagi.");
+                    prog.setMessage("Memasang… KERE-HORE akan tertutup sebentar lalu terbuka lagi.");
                     Updater.install(this, apk, () -> runOnUiThread(() -> {
                         prog.dismiss();
-                        android.widget.Toast.makeText(this, "Izinkan KlikDash memasang aplikasi, lalu cek update lagi",
+                        android.widget.Toast.makeText(this, "Izinkan KERE-HORE memasang aplikasi, lalu cek update lagi",
                                 android.widget.Toast.LENGTH_LONG).show();
                     }));
                 });
@@ -445,7 +458,7 @@ public class SettingsActivity extends Activity {
         form.addView(e, new LinearLayout.LayoutParams(MATCH, px(52)));
     }
 
-    /** Dialog bergaya KlikDash: panel gelap bergaris tipis, tombol amber. Panggil sebagai ganti show(). */
+    /** Dialog bergaya KERE-HORE: panel gelap bergaris tipis, tombol amber. Panggil sebagai ganti show(). */
     static AlertDialog showDark(AlertDialog.Builder b) {
         AlertDialog d = b.create();
         d.setCanceledOnTouchOutside(false); // jangan hilang karena tersentuh, isian (API key) bisa ikut hilang

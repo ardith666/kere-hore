@@ -12,7 +12,7 @@ VERSION_CODE=${VERSION_CODE:-5}
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 BT=$SDK/build-tools/36.0.0
 JAR=$SDK/platforms/android-35/android.jar
-DEVICE=${DEVICE:-192.168.1.17:5555}
+DEVICE=${DEVICE:-192.168.1.18:5555}
 MODE=${1:-}
 
 rm -rf build

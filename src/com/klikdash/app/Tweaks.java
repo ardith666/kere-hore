@@ -79,8 +79,20 @@ final class Tweaks {
     static String exec(String cmd) throws IOException { return exec(cmd, 15000); }
 
     static String exec(String cmd, int timeoutMs) throws IOException {
+        IOException last = null;
+        for (int port : new int[]{5555, 8555}) {
+            try {
+                return execOn(port, cmd, timeoutMs);
+            } catch (IOException e) {
+                last = e;
+            }
+        }
+        throw last;
+    }
+
+    private static String execOn(int port, String cmd, int timeoutMs) throws IOException {
         try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress("127.0.0.1", 5555), 3000);
+            s.connect(new InetSocketAddress("127.0.0.1", port), 3000);
             s.setSoTimeout(timeoutMs);
             DataInputStream in = new DataInputStream(s.getInputStream());
             OutputStream out = s.getOutputStream();

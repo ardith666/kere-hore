@@ -48,6 +48,7 @@ public class QuranService extends Service
     static final String RECITER = "Mishary Rashid Alafasy";
     /** Audio per ayat; APK tidak membawanya, diunduh saat diputar lalu disimpan untuk offline. */
     static final String AUDIO_URL = "https://everyayah.com/data/Alafasy_128kbps/%03d%03d.mp3";
+    static final String AUDIO_URL_LQ = "https://everyayah.com/data/Alafasy_64kbps/%03d%03d.mp3";
 
     // Status dibaca langsung oleh UI (satu proses, thread utama).
     static int surah = 1, ayah = 1, mode = MODE_CONTINUE;
@@ -79,6 +80,63 @@ public class QuranService extends Service
     }
 
     /** Unduh seluruh audio surah {@code s} untuk dipakai offline. */
+    static boolean isAllDownloaded(Context c) {
+        int[] n = downloaded(c);
+        for (int s = 1; s <= QuranData.SURAH_COUNT; s++) {
+            if (n[s] < QuranData.count(s)) return false;
+        }
+        return true;
+    }
+
+    static volatile boolean dlAllRunning;
+
+    static void downloadAll(Context c, boolean lq) {
+        if (dlAllRunning) return;
+        dlAllRunning = true;
+        Context app = c.getApplicationContext();
+        Handler main = new Handler(Looper.getMainLooper());
+        String tpl = lq ? AUDIO_URL_LQ : AUDIO_URL;
+        new Thread(() -> {
+            try {
+                for (int s = 1; s <= QuranData.SURAH_COUNT; s++) {
+                    int total = QuranData.count(s);
+                    dlSurah = s;
+                    dlTotal = total;
+                    dlDone = 0;
+                    for (int a = 1; a <= total; a++) {
+                        File f = audioFile(app, s, a);
+                        if (!f.exists() || f.length() == 0) {
+                            try {
+                                File dir = f.getParentFile();
+                                if (dir != null && !dir.exists()) dir.mkdirs();
+                                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(
+                                    String.format(Locale.US, tpl, s, a)).openConnection();
+                                conn.setConnectTimeout(10000);
+                                conn.setReadTimeout(15000);
+                                if (conn.getResponseCode() == 200) {
+                                    try (java.io.InputStream in = conn.getInputStream();
+                                         java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                                        byte[] buf = new byte[8192];
+                                        int n;
+                                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                                    }
+                                }
+                                conn.disconnect();
+                            } catch (Throwable ignored) {}
+                        }
+                        dlDone = a;
+                        main.post(QuranService::notifyListeners);
+                    }
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                dlSurah = 0;
+                dlAllRunning = false;
+                main.post(QuranService::notifyListeners);
+            }
+        }).start();
+    }
+
     static void download(Context c, int s) {
         Compat.startForegroundService(c, new Intent(c, QuranService.class).setAction(ACTION_DOWNLOAD).putExtra("s", s));
     }

@@ -4,16 +4,14 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- adbd lokal (127.0.0.1:5555, lihat Tweaks.java), unduhan Al-Qur'an, dan asisten AI -->
+    <!-- adbd lokal (127.0.0.1:5555, lihat Tweaks.java) dan unduhan Al-Qur'an -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Ubin TANYA: perintah suara untuk asisten AI -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Pembaruan dari Pengaturan bila ADB lokal tidak tersedia (Android meminta konfirmasi) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
-        android:label="KlikDash"
+        android:label="KERE-HORE"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/KlikDash"
         android:allowBackup="false"
@@ -65,7 +63,7 @@
 
         <activity
             android:name=".SettingsActivity"
-            android:label="Pengaturan KlikDash"
+            android:label="Pengaturan KERE-HORE"
             android:taskAffinity="com.klikdash.app.settings"
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
@@ -73,13 +71,13 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection|fontScale" />
 
         <activity
-            android:name=".AskActivity"
-            android:label="Tanya"
-            android:icon="@drawable/ic_ask"
-            android:taskAffinity="com.klikdash.app.ask"
+            android:name=".MaintenanceActivity"
+            android:label="Servis"
+            android:icon="@drawable/ic_maintenance"
+            android:taskAffinity="com.klikdash.app.maintenance"
             android:launchMode="singleTask"
-            android:excludeFromRecents="true"
-            android:screenOrientation="unspecified">
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -97,5 +95,16 @@
         <service
             android:name=".QuranService"
             android:exported="false" />
+
+        <!-- Izin baca sesi media BT (judul lagu + album art + tombol putar) -->
+        <service
+            android:name=".BtNowPlaying"
+            android:label="KlikDash BT"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

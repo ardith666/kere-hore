@@ -230,6 +230,36 @@ public class QuranActivity extends Activity {
         surahList.setAdapter(surahAdapter);
         surahList.setOnItemClickListener((p, v, pos, id) -> open(pos + 1, 1));
         left.addView(surahList, new LinearLayout.LayoutParams(MATCH, 0, 1f));
+
+        android.widget.Button dlAllBtn = new android.widget.Button(this);
+        dlAllBtn.setText("Unduh Semua Audio (Offline)");
+        dlAllBtn.setTextSize(12);
+        dlAllBtn.setTextColor(0xFFFFFFFF);
+        dlAllBtn.setBackgroundColor(0xFF0284C7);
+        dlAllBtn.setAllCaps(false);
+        dlAllBtn.setOnClickListener(v -> {
+            String[] opts = {
+                "LQ — 64 kbps (~450 MB, lebih ringan)",
+                "HQ — 128 kbps (~950 MB, kualitas tinggi)"
+            };
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Pilih Kualitas Audio Offline")
+                .setItems(opts, (d, which) -> {
+                    boolean lq = (which == 0);
+                    QuranService.downloadAll(this, lq);
+                    android.widget.Toast.makeText(this,
+                        "Mengunduh semua audio (" + (lq ? "LQ ~450 MB" : "HQ ~950 MB") + ") di latar belakang...",
+                        android.widget.Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("Batal", null)
+                .show();
+        });
+        if (QuranService.isAllDownloaded(this)) {
+            dlAllBtn.setVisibility(View.GONE);
+        }
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        dlp.setMargins(px(12), px(8), px(12), px(12));
+        left.addView(dlAllBtn, dlp);
         row.addView(left, portrait ? new LinearLayout.LayoutParams(MATCH, px(hDp * 0.34f))
                 : new LinearLayout.LayoutParams(px(listDp()), MATCH));
         row.addView(rule(), portrait ? new LinearLayout.LayoutParams(MATCH, px(1)) : new LinearLayout.LayoutParams(px(1), MATCH));

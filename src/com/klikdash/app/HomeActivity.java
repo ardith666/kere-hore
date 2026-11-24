@@ -1,6 +1,7 @@
 package com.klikdash.app;
 
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -25,6 +26,13 @@ import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.AudioManager;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
+import android.os.Handler;
+import android.os.Looper;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -86,7 +94,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
-/** KlikDash: launcher ringan untuk headunit 1280x720. Tanpa animasi, tanpa library. */
+/** KERE-HORE: launcher ringan untuk headunit 1280x720. Tanpa animasi, tanpa library. */
 public class HomeActivity extends Activity {
 
     static final int BG = 0xFF0B0B0A, PANEL = 0xFF151513, LINE = 0xFF2B2A26, TEXT = 0xFFECE6D8,
@@ -107,7 +115,7 @@ public class HomeActivity extends Activity {
             {"com.klikdash.app/.QuranActivity", "AL-QUR'AN"},
             {"com.nwd.carkit360camera/.home_horizontalActivity", "KAMERA 360"},
             {"com.android.car.setting/.home_horizontalActivity", "SISTEM"},
-            {"com.klikdash.app/.AskActivity", "TANYA"}, // asisten AI suara; Radio tetap ada di Semua
+            {"com.klikdash.app/.MaintenanceActivity", "SERVIS"}, // pencatatan moving part & odometer
     };
     static final int SLOTS = DEFAULTS.length;
     /** Grid home: slot + ubin "Semua"; jumlah kolom dipilih dari ukuran layar (lihat measureScreen). */
@@ -153,6 +161,9 @@ public class HomeActivity extends Activity {
     View home;
     LinearLayout drawer;
     TextView clock, day, date, hijri, speed, drawerTitle, drawerCount, temp;
+    AudioManager am;
+    TextView volumeText;
+    VolumeIcon volumeIcon;
 
     // Suhu CPU headunit dari sensor thermal; dibaca tiap 5 detik selama home tampil.
     static final int HOT = 0xFFFF5A3C;
@@ -186,7 +197,8 @@ public class HomeActivity extends Activity {
 
     void updateTemp() {
         String s = readLine(cpuZone);
-        if (s == null) { temp.setText(""); return; }
+        if (s == null) { temp.setVisibility(View.GONE); return; }
+        temp.setVisibility(View.VISIBLE);
         int c;
         try {
             c = Integer.parseInt(s);
@@ -210,7 +222,8 @@ public class HomeActivity extends Activity {
     };
 
     final LocationListener locRx = new LocationListener() {
-        @Override public void onLocationChanged(Location l) { onLocation(l); }
+        @Override public void onLocationChanged(Location l) {
+            TripLogger.log(HomeActivity.this, l); onLocation(l); }
         @Override public void onStatusChanged(String p, int s, Bundle b) { }
         @Override public void onProviderEnabled(String p) { }
         @Override public void onProviderDisabled(String p) { }
@@ -223,6 +236,80 @@ public class HomeActivity extends Activity {
             for (Tile t : tiles) t.invalidate();
         }
     };
+
+    final BroadcastReceiver volRx = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            if (i != null && i.hasExtra("extra_volume")) {
+                int ev = i.getIntExtra("extra_volume", -1);
+                if (ev >= 0) {
+                    setVolumeUi(ev, getMaxVolumeLevel());
+                    return;
+                }
+            }
+            updateVolume();
+        }
+    };
+
+    final android.database.ContentObserver volObserver = new android.database.ContentObserver(new Handler(android.os.Looper.getMainLooper())) {
+        @Override public void onChange(boolean selfChange) {
+            super.onChange(selfChange);
+            updateVolume();
+        }
+    };
+
+    int getVolumeLevel() {
+        try {
+            int mcu = Settings.System.getInt(getContentResolver(), "mcu_system_volume", -1);
+            if (mcu >= 0) return mcu;
+        } catch (Exception ignored) {}
+        try {
+            int arm = Settings.System.getInt(getContentResolver(), "arm_volume", -1);
+            if (arm > 0) return arm;
+        } catch (Exception ignored) {}
+        if (am == null) am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        try {
+            return am.getStreamVolume(AudioManager.STREAM_MUSIC);
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    int getMaxVolumeLevel() {
+        try {
+            int max = Settings.System.getInt(getContentResolver(), "mcu_max_volume", -1);
+            if (max > 0) return max;
+        } catch (Exception ignored) {}
+        if (am == null) am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        try {
+            return am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        } catch (Exception ignored) {}
+        return 40;
+    }
+
+    String readVolume() {
+        int v = getVolumeLevel();
+        return v >= 0 ? String.valueOf(v) : "--";
+    }
+
+    void setVolumeUi(int cur, int max) {
+        if (volumeText != null && cur >= 0) {
+            volumeText.setText(String.valueOf(cur));
+            if (volumeIcon != null) volumeIcon.setVolume(cur, max);
+        }
+    }
+
+    void updateVolume() {
+        setVolumeUi(getVolumeLevel(), getMaxVolumeLevel());
+    }
+
+    void showVolumeSlider() {
+        try {
+            sendBroadcast(new Intent("com.nwd.android.ACTION_OS_VOLUME_STATE_CHANGE").putExtra("extra_volume_state", 1));
+        } catch (Exception ignored) {}
+        if (am == null) am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        try {
+            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
+        } catch (Exception ignored) {}
+    }
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -261,6 +348,7 @@ public class HomeActivity extends Activity {
         drawer.setVisibility(View.GONE);
         root.addView(home, MATCH, MATCH);
         root.addView(drawer, MATCH, MATCH);
+        addMaintenanceOverlay(root);
         setContentView(root);
 
         IntentFilter tf = new IntentFilter(Intent.ACTION_TIME_TICK);
@@ -282,6 +370,22 @@ public class HomeActivity extends Activity {
         }
 
         applyLocationExtras(getIntent());
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        IntentFilter vf = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+        vf.addAction("android.media.STREAM_MUTE_CHANGED_ACTION");
+        vf.addAction("android.media.MASTER_VOLUME_CHANGED_ACTION");
+        vf.addAction("com.nwd.action.ACTION_VOLUME_STATE_CHANGE");
+        vf.addAction("com.nwd.android.ACTION_OS_VOLUME_STATE_CHANGE");
+        vf.addAction("com.nwd.ACTION_SET_ARM_VOLUME_STATE");
+        vf.addAction("com.bt.ACTION_A2DP_VOLUME_STATE_CHANGE");
+        registerReceiver(volRx, vf);
+        try {
+            getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("mcu_system_volume"), false, volObserver);
+            getContentResolver().registerContentObserver(
+                    Settings.System.CONTENT_URI, true, volObserver);
+        } catch (Exception ignored) {}
         updateTime();
         startLocation();
         Tweaks.applyAsync();
@@ -295,22 +399,28 @@ public class HomeActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        refreshMaintenanceOverlay();
         if (prefs.getBoolean("speedometer", false) != speedGaugeEnabled) {
             recreate();
             return;
         }
-        if (btWidgetActive() && btRx != null) {
-            try {
-                IntentFilter bf = new IntentFilter("com.nwd.btmusic.playinfo.changed");
-                bf.addAction("com.bt.ACTION_BT_MUSIC_PLAY");
-                bf.addAction("com.bt.ACTION_BT_MUSIC_PAUSE");
-                registerReceiver(btRx, bf);
-            } catch (Exception ignored) {}
+        if (btWidgetActive()) {
+            if (btWidget != null) btWidget.syncFromPrefs();
+            if (btRx != null) {
+                try {
+                    IntentFilter bf = new IntentFilter("com.nwd.btmusic.playinfo.changed");
+                    bf.addAction("com.bt.ACTION_BT_MUSIC_PLAY");
+                    bf.addAction("com.bt.ACTION_BT_MUSIC_PAUSE");
+                    registerReceiver(btRx, bf);
+                } catch (Exception ignored) {}
+            }
+            btSessionConnect();
         }
         QuranService.listeners.add(onQuran);
         loadSlots(); // bisa diatur ulang dari Pengaturan
         onQuran.run();
         updateTime();
+        updateVolume();
         prayerView.startTicking();
         // temp hidden
         refreshDefaultHome();
@@ -353,6 +463,7 @@ public class HomeActivity extends Activity {
 
     final LocationListener speedRx = new LocationListener() {
         @Override public void onLocationChanged(Location l) {
+            TripLogger.log(HomeActivity.this, l);
             if (!l.hasSpeed()) return;
             speedAt = SystemClock.elapsedRealtime();
             int kmh = Math.round(l.getSpeed() * 3.6f);
@@ -418,6 +529,34 @@ public class HomeActivity extends Activity {
         startActivity(new Intent(this, SettingsActivity.class));
     }
 
+    /** App BT Music berbeda per firmware; coba yang terpasang, NWD dulu baru unit lain. */
+    static final String[][] BT_MUSIC_APPS = {
+            {"com.nwd.bt.music", "com.nwd.bt.music.home_horizontalActivity"},
+            {"com.autochips.bluetooth", "com.autochips.bluetooth.BtMusicActivity"},
+            {"com.autochips.bluetooth", "com.autochips.bluetooth.MainBluetoothActivity"},
+            {"com.hcn.AutoMediaPlayer", null},
+    };
+
+    void openBtMusicApp() {
+        userLaunch = true;
+        for (String[] c : BT_MUSIC_APPS) {
+            Intent i;
+            if (c[1] != null) {
+                i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setComponent(new ComponentName(c[0], c[1]));
+            } else {
+                i = getPackageManager().getLaunchIntentForPackage(c[0]);
+                if (i == null) continue;
+            }
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            try {
+                startActivity(i);
+                return;
+            } catch (Exception ignored) { }
+        }
+        Toast.makeText(this, "Tidak bisa membuka aplikasi", Toast.LENGTH_SHORT).show();
+    }
+
     void refreshDefaultHome() {
         makeDefault.setVisibility(HomeSwitch.isDefault(this) ? View.GONE : View.VISIBLE);
     }
@@ -430,10 +569,11 @@ public class HomeActivity extends Activity {
         if (btRx != null) {
             try { unregisterReceiver(btRx); } catch (Exception ignored) {}
         }
+        btSessionStop();
         super.onPause();
     }
 
-    /** true bila aplikasi di depan dibuka lewat KlikDash (ubin/daftar), bukan muncul sendiri. */
+    /** true bila aplikasi di depan dibuka lewat KERE-HORE (ubin/daftar), bukan muncul sendiri. */
     boolean userLaunch;
     /** Awal jendela "baru menyala": boot (0) atau saat bangun dari tidur (ACC on). */
     long wakeAt;
@@ -468,6 +608,8 @@ public class HomeActivity extends Activity {
         unregisterReceiver(timeRx);
         unregisterReceiver(pkgRx);
         unregisterReceiver(wakeRx);
+        try { unregisterReceiver(volRx); } catch (Exception ignored) { }
+        try { getContentResolver().unregisterContentObserver(volObserver); } catch (Exception ignored) { }
         try { unregisterReceiver(unlockRx); } catch (IllegalArgumentException ignored) { }
         super.onDestroy();
     }
@@ -504,7 +646,7 @@ public class HomeActivity extends Activity {
             } else {
                 slotCn[i] = s.isEmpty() ? null : ComponentName.unflattenFromString(s); // "" = slot kosong
                 slotLabel[i] = prefs.getString("l" + i, null);
-                // v1.3: ubin pengaturan mobil berganti nama jadi SISTEM (Pengaturan kini milik KlikDash).
+                // v1.3: ubin pengaturan mobil berganti nama jadi SISTEM (Pengaturan kini milik KERE-HORE).
                 if ("PENGATURAN".equals(slotLabel[i]) && slotCn[i] != null
                         && "com.android.car.setting".equals(slotCn[i].getPackageName())) {
                     slotLabel[i] = "SISTEM";
@@ -533,6 +675,123 @@ public class HomeActivity extends Activity {
     }
 
     BtWidget btWidget;
+    /** Sesi A2DP dari com.android.bluetooth; jalur cadangan bila broadcast BT firmware tidak ada. */
+    MediaController btCtrl;
+    private TextView topTagView;
+    private TextView maintWidgetView;
+
+    private void addMaintenanceOverlay(FrameLayout root) {
+        refreshMaintenanceOverlay();
+    }
+
+    private void refreshMaintenanceOverlay() {
+        if (topTagView != null) {
+            topTagView.setText(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US));
+        }
+        if (maintWidgetView != null) {
+            if (!MaintenanceStore.isWidgetEnabled(this)) {
+                maintWidgetView.setVisibility(View.GONE);
+                return;
+            }
+            org.json.JSONObject data = MaintenanceStore.load(this);
+            java.util.List<org.json.JSONObject> parts = MaintenanceStore.getNearestParts(this, 3);
+            if (parts.isEmpty()) {
+                maintWidgetView.setVisibility(View.GONE);
+                return;
+            }
+            int cur = data.optInt("currentKm", 0);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < parts.size(); i++) {
+                org.json.JSONObject p = parts.get(i);
+                int rem = p.optInt("targetKm", 0) - cur;
+                if (i > 0) sb.append("\n");
+                sb.append("• ").append(p.optString("name", "Part")).append(" (Sisa ").append(rem).append(" km)");
+            }
+            maintWidgetView.setText(sb.toString());
+            maintWidgetView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    ComponentName btListener() { return new ComponentName(getPackageName(), BtNowPlaying.class.getName()); }
+
+    boolean btNotifyAccess() {
+        String s = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        return s != null && s.contains(getPackageName());
+    }
+
+    void btSessionConnect() {
+        btSessionStop();
+        if (!btWidgetActive()) return;
+        if (!btNotifyAccess()) {
+            if (!prefs.getBoolean("btAccessAsked", false)) {
+                prefs.edit().putBoolean("btAccessAsked", true).apply();
+                Toast.makeText(this, "Izinkan akses notifikasi untuk info lagu BT", Toast.LENGTH_LONG).show();
+                try {
+                    startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignored) { }
+            }
+            return;
+        }
+        new Thread(this::btSessionFind, "bt-session").start();
+    }
+
+    void btSessionFind() {
+        final java.util.List<MediaController> list;
+        try {
+            MediaSessionManager m = (MediaSessionManager) getSystemService(MEDIA_SESSION_SERVICE);
+            list = m.getActiveSessions(btListener()); // binding sinkron: jangan di main thread
+        } catch (Exception e) {
+            return;
+        }
+        MediaController pick = null;
+        for (MediaController c : list) if ("com.android.bluetooth".equals(c.getPackageName())) { pick = c; break; }
+        if (pick == null) for (MediaController c : list) { if (c.getMetadata() != null) { pick = c; break; } }
+        if (pick == null) return;
+        final MediaController chosen = pick;
+        runOnUiThread(() -> {
+            btCtrl = chosen;
+            chosen.registerCallback(btCb, new Handler(Looper.getMainLooper()));
+            btApply(chosen.getMetadata(), chosen.getPlaybackState());
+        });
+    }
+
+    void btSessionStop() {
+        if (btCtrl != null) {
+            try { btCtrl.unregisterCallback(btCb); } catch (Exception ignored) { }
+            btCtrl = null;
+        }
+    }
+
+    void btApply(MediaMetadata md, PlaybackState st) {
+        if (btWidget == null) return;
+        String t = null, a = null;
+        Bitmap art = null;
+        if (md != null) {
+            CharSequence tt = md.getText(MediaMetadata.METADATA_KEY_TITLE);
+            CharSequence aa = md.getText(MediaMetadata.METADATA_KEY_ARTIST);
+            if (aa == null) aa = md.getText(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
+            t = tt == null ? null : tt.toString();
+            a = aa == null ? null : aa.toString();
+            art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+            if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
+        }
+        boolean playing = st != null && st.getState() == PlaybackState.STATE_PLAYING;
+        btWidget.session(t, a, playing, art);
+    }
+
+    final MediaController.Callback btCb = new MediaController.Callback() {
+        @Override public void onMetadataChanged(MediaMetadata md) {
+            btApply(md, btCtrl == null ? null : btCtrl.getPlaybackState());
+        }
+
+        @Override public void onPlaybackStateChanged(PlaybackState st) {
+            btApply(btCtrl == null ? null : btCtrl.getMetadata(), st);
+        }
+
+        @Override public void onSessionDestroyed() { btSessionConnect(); }
+    };
+
     boolean btWidgetActive() { return prefs != null && prefs.getBoolean("btWidget", false); }
     boolean isBtSlot(int idx) { return btWidgetActive() && idx == 1; } // use slot 1 as holder, will span
     boolean inBtArea(int idx) { return btWidgetActive() && (idx == 0 || idx == 1 || idx == 3 || idx == 4); }
@@ -576,7 +835,29 @@ public class HomeActivity extends Activity {
         return a != null ? a : appByPkg.get(cn.getPackageName());
     }
 
+    boolean isScreenOffComponent(ComponentName cn) {
+        if (cn == null) return false;
+        String cls = cn.getClassName();
+        if ("com.nwd.screenoff.ScreenOffActivity".equals(cls)) return true;
+        if (cls != null && (cls.toLowerCase().contains("screenoff") || cls.toLowerCase().contains("screen_off"))) return true;
+        return false;
+    }
+
+    void turnScreenOff() {
+        try {
+            // Jalur resmi MCU NWD (sama persis dengan launcher bawaan com.launcher.apk):
+            // Kirim paket protokol tombol DISPLAY (key 58 / 0x3A) ke MCU agar hardware backlight
+            // dimatikan dan dinyalakan kembali secara aman oleh kontroler MCU tanpa mengacaukan TCON/panel LCD.
+            byte[] data = new byte[] { (byte)0xF0, 6, 1, 1, 0, 0, 0, 58, (byte)0x42 };
+            sendBroadcast(new Intent("com.nwd.action.EMU_RECEIVER_MCU_PROTOCAL").putExtra("protocal", data));
+        } catch (Exception ignored) {}
+    }
+
     void launch(ComponentName cn) {
+        if (isScreenOffComponent(cn)) {
+            turnScreenOff();
+            return;
+        }
         userLaunch = true;
         Intent i = new Intent(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
@@ -719,9 +1000,26 @@ public class HomeActivity extends Activity {
 
     // ---------------------------------------------------------------- layout
 
+    /** Suhu CPU. API 24+ punya HardwarePropertiesManager; sysfs dipakai sebagai cadangan. */
     String readCpuTemp() {
         try {
-            String[] p = {"/sys/class/thermal/thermal_zone0/temp", "/sys/devices/virtual/thermal/thermal_zone0/temp", "/sys/class/thermal/thermal_zone1/temp"};
+            android.os.HardwarePropertiesManager hp = (android.os.HardwarePropertiesManager)
+                    getSystemService(Context.HARDWARE_PROPERTIES_SERVICE);
+            if (hp != null) {
+                float[] t = hp.getDeviceTemperatures(
+                        android.os.HardwarePropertiesManager.DEVICE_TEMPERATURE_CPU,
+                        android.os.HardwarePropertiesManager.TEMPERATURE_CURRENT);
+                if (t != null && t.length > 0) {
+                    float max = t[0];
+                    for (float v : t) if (v > max) max = v;
+                    if (max > 0 && max < 200) return String.valueOf(Math.round(max));
+                }
+            }
+        } catch (Exception ignored) { }
+        try {
+            String[] p = {"/sys/class/thermal/thermal_zone0/temp",
+                    "/sys/devices/virtual/thermal/thermal_zone0/temp",
+                    "/sys/class/thermal/thermal_zone1/temp"};
             for (String s : p) {
                 java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(s));
                 String v = br.readLine().trim();
@@ -732,41 +1030,93 @@ public class HomeActivity extends Activity {
                     return String.valueOf(t);
                 }
             }
-        } catch (Exception ignored) {}
-        return "--";
+        } catch (Exception ignored) { }
+        return null;
     }
 
+    /** {total, free} byte dari Process.getTotalMemory()/getFreeMemory() (dipakai ActivityManager). */
+    long[] sysinfoRam() {
+        try {
+            java.lang.reflect.Method tot = android.os.Process.class.getMethod("getTotalMemory");
+            java.lang.reflect.Method fre = android.os.Process.class.getMethod("getFreeMemory");
+            long total = ((Number) tot.invoke(null)).longValue();
+            long free = ((Number) fre.invoke(null)).longValue();
+            if (total > 0) return new long[]{total, free};
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
+    /** Beban CPU: rata-rata frekuensi sejak sampel sebelumnya, diskalakan min..max (proc/stat diblokir SELinux). */
+    long[] cpuPrev;
     int readCpuPercent() {
-        try {
-            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader("/proc/stat"));
-            String l1 = br.readLine();
-            br.close();
-            String[] a1 = l1.split("\\s+");
-            long u1 = Long.parseLong(a1[1])+Long.parseLong(a1[2])+Long.parseLong(a1[3]), i1 = Long.parseLong(a1[4]), s1 = Long.parseLong(a1[5]), w1 = Long.parseLong(a1[6]);
-            Thread.sleep(250);
-            br = new java.io.BufferedReader(new java.io.FileReader("/proc/stat"));
-            String l2 = br.readLine();
-            br.close();
-            String[] a2 = l2.split("\\s+");
-            long u2 = Long.parseLong(a2[1])+Long.parseLong(a2[2])+Long.parseLong(a2[3]), i2 = Long.parseLong(a2[4]), s2 = Long.parseLong(a2[5]), w2 = Long.parseLong(a2[6]);
-            long du=u2-u1, di=i2-i1, ds=s2-s1, dw=w2-w1;
-            long total=du+di+ds+dw; if(total<=0)return 0;
-            return Math.round(du*100f/total);
-        } catch (Exception ignored) {}
-        return 0;
+        long[][] cur = cpuFreqTicks();
+        if (cur == null) return 0;
+        long[] prev = cpuPrev;
+        cpuPrev = cur[1];
+        if (prev == null || prev.length != cur[1].length) return 0;
+        long total = 0, weighted = 0;
+        int n = cur[0].length;
+        for (int i = 0; i < n; i++) {
+            long d = cur[1][i] - prev[i];
+            if (d <= 0) continue;
+            total += d;
+            weighted += d * cur[0][i];
+        }
+        if (total <= 0) return 0;
+        long fmin = cur[0][n - 1], fmax = cur[0][0];
+        if (fmax <= fmin) return 0;
+        double avg = (double) weighted / total;
+        int pct = (int) Math.round((avg - fmin) * 100.0 / (fmax - fmin));
+        return Math.max(0, Math.min(100, pct));
     }
 
-    int readMemPercent() {
+    /** {frekuensi, kumulatif jiffies} per tingkat; baris pertama = frekuensi tertinggi. */
+    long[][] cpuFreqTicks() {
+        try (java.io.BufferedReader br = new java.io.BufferedReader(
+                new java.io.FileReader("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state"))) {
+            java.util.ArrayList<long[]> v = new java.util.ArrayList<>();
+            String l;
+            while ((l = br.readLine()) != null) {
+                String[] p = l.trim().split("\\s+");
+                if (p.length >= 2) v.add(new long[]{Long.parseLong(p[0]), Long.parseLong(p[1])});
+            }
+            if (v.isEmpty()) return null;
+            long[] f = new long[v.size()], t = new long[v.size()];
+            for (int i = 0; i < f.length; i++) { f[i] = v.get(i)[0]; t[i] = v.get(i)[1]; }
+            return new long[][]{f, t};
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * {terpakai MB, total MB, persen} angka real. Vendor menambal /proc/meminfo jadi 4 GB dan angkanya
+     * berubah-ubah tiap dibaca; total diturunkan dari /dev (tmpfs = 50% RAM fisik) atau zoneinfo.
+     */
+    int[] readMemStat() {
+        long total = 0;
         try {
-            android.app.ActivityManager am = (android.app.ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+            android.os.StatFs dev = new android.os.StatFs("/dev");
+            total = dev.getTotalBytes() * 2; // tmpfs /dev = setengah RAM fisik
+        } catch (Exception ignored) { }
+        if (total < 268435456L || total > 8589934592L) {
+            long[] r = sysinfoRam();
+            total = r != null ? r[0] : 0;
+        }
+        if (total <= 0) return new int[]{0, 0, 0};
+        long free = 0;
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
             am.getMemoryInfo(mi);
-            long total = mi.totalMem;
-            long used = total - mi.availMem;
-            if (total<=0)return 0;
-            return Math.round(used*100f/total);
-        } catch (Exception ignored) {}
-        return 0;
+            free = mi.availMem;
+        } catch (Exception ignored) { }
+        if (free < 0 || free > total) free = 0;
+        long used = total - free;
+        int totalMb = (int) (total / 1048576L);
+        int usedMb = (int) (used / 1048576L);
+        int pct = (int) Math.round(used * 100.0 / total);
+        return new int[]{usedMb, totalMb, pct};
     }
 
     final Runnable memUpdater = new Runnable() {
@@ -816,49 +1166,64 @@ public class HomeActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView tag = text("ARDITH666", fMonoBold, 12, AMBER);
+        TextView tag = text(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US), fMonoBold, 12, AMBER);
         tag.setLetterSpacing(0.25f);
+        tag.setOnClickListener(v -> startActivity(new Intent(this, MaintenanceActivity.class)));
+        topTagView = tag;
         top.addView(tag, new LinearLayout.LayoutParams(WRAP, WRAP));
-        TextView memI = text("M", fMonoBold, 12, DIM);
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(WRAP, WRAP);
+        int iconSz = px(14);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(iconSz, iconSz);
         mlp.leftMargin = px(18);
-        top.addView(memI, mlp);
-        TextView memv = text(readMemPercent()+"%", fMono, 11, DIM);
-        memv.setPadding(px(2),0,0,0);
+        top.addView(new MiniIcon(0, DIM), mlp);
+        int[] ms0 = readMemStat();
+        TextView memv = text(ms0[1] > 0 ? ms0[0] + "/" + ms0[1] + "M " + ms0[2] + "%" : "--", fMono, 11, DIM);
+        memv.setPadding(px(5),0,0,0);
         top.addView(memv);
-        TextView cpuI = text("C", fMonoBold, 12, DIM);
-        cpuI.setPadding(px(12),0,0,0);
-        top.addView(cpuI);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(iconSz, iconSz);
+        clp.leftMargin = px(14);
+        top.addView(new MiniIcon(1, DIM), clp);
         TextView cpuv = text(readCpuPercent()+"%", fMono, 11, DIM);
-        cpuv.setPadding(px(2),0,0,0);
+        cpuv.setPadding(px(5),0,0,0);
         top.addView(cpuv);
-        TextView tmpv = text(readCpuTemp(), fMonoBold, 12, 0xFF22C55E);
-        tmpv.setPadding(px(12),0,0,0);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(iconSz, iconSz);
+        tlp.leftMargin = px(14);
+        MiniIcon tempIcon = new MiniIcon(2, DIM);
+        top.addView(tempIcon, tlp);
+        TextView tmpv = text("", fMonoBold, 12, 0xFF22C55E);
+        tmpv.setPadding(px(5),0,0,0);
+        top.addView(tmpv);
+        boolean tempKnown = readCpuTemp() != null;
+        if (!tempKnown) { tempIcon.setVisibility(View.GONE); tmpv.setVisibility(View.GONE); }
         final Handler hmem = new Handler(getMainLooper());
         Runnable upd = new Runnable() {
             @Override public void run() {
                 try {
-                    memv.setText(readMemPercent()+"%");
-                    cpuv.setText(readCpuPercent()+"%");
+                    int[] ms = readMemStat();
+                    memv.setText(ms[1] > 0 ? ms[0] + "/" + ms[1] + "M " + ms[2] + "%" : "--");
+                    cpuv.setText(readCpuPercent() + "%");
                     String t = readCpuTemp();
-                    tmpv.setText(t);
-                    int tv = -1; try { tv = Integer.parseInt(t); } catch (Exception ignored){}
-                    tmpv.setTextColor(tv >= 90 ? 0xFFFF3B30 : tv >= 75 ? 0xFFFFB000 : 0xFF22C55E);
-                } catch (Exception ignored) {}
+                    tmpv.setText(t == null ? "" : t + "°");
+                    int tv = -1;
+                    try { tv = Integer.parseInt(t); } catch (Exception ignored) { }
+                    int col = tv >= 90 ? 0xFFFF3B30 : tv >= 75 ? 0xFFFFB000 : 0xFF22C55E;
+                    tmpv.setTextColor(col);
+                    tempIcon.setColor(tv >= 75 ? col : DIM);
+                    updateVolume();
+                } catch (Exception ignored) { }
                 hmem.postDelayed(this, 3000);
             }
         };
         hmem.post(upd);
-        // Pengaturan KlikDash (tampilan, Hemat Daya, asisten AI). Kotak sentuh 48dp walau ikonnya kecil.
+        // Pengaturan KERE-HORE (tampilan, Hemat Daya, asisten AI). Kotak sentuh 48dp walau ikonnya kecil.
         TextView gear = text("⚙", fMonoBold, 18, DIM);
         gear.setGravity(Gravity.CENTER);
-        gear.setContentDescription("Pengaturan KlikDash");
+        gear.setContentDescription("Pengaturan KERE-HORE");
         gear.setOnClickListener(v -> openSettings());
         top.addView(gear, new LinearLayout.LayoutParams(px(48), px(48)));
         top.setGravity(Gravity.CENTER_VERTICAL);
         left.addView(top);
 
-        // Muncul hanya bila KlikDash belum jadi tampilan utama (lihat refreshDefaultHome).
+        // Muncul hanya bila KERE-HORE belum jadi tampilan utama (lihat refreshDefaultHome).
         makeDefault = new Button("JADIKAN TAMPILAN UTAMA", true);
         makeDefault.setOnClickListener(v -> HomeSwitch.makeDefault(this, prefs, this::refreshDefaultHome));
         makeDefault.setVisibility(View.GONE);
@@ -897,12 +1262,46 @@ public class HomeActivity extends Activity {
         }
         left.addView(clockRow, new LinearLayout.LayoutParams(MATCH, WRAP));
 
+        maintWidgetView = new TextView(this);
+        maintWidgetView.setTextColor(0xFFCBD5E1);
+        maintWidgetView.setTextSize(11);
+        maintWidgetView.setLineSpacing(px(2), 1f);
+        LinearLayout.LayoutParams mwp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        mwp.topMargin = px(8);
+        maintWidgetView.setOnClickListener(v -> startActivity(new Intent(this, MaintenanceActivity.class)));
+        left.addView(maintWidgetView, mwp);
+        refreshMaintenanceOverlay();
+
+        LinearLayout barRow = new LinearLayout(this);
+        barRow.setOrientation(LinearLayout.HORIZONTAL);
+        barRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams brl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        brl.topMargin = px(14);
+        brl.bottomMargin = px(22);
+
         View bar = new View(this);
         bar.setBackgroundColor(AMBER);
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(px(84), px(6));
-        bl.topMargin = px(14);
-        bl.bottomMargin = px(22);
-        left.addView(bar, bl);
+        barRow.addView(bar, new LinearLayout.LayoutParams(px(84), px(6)));
+
+        LinearLayout volBox = new LinearLayout(this);
+        volBox.setOrientation(LinearLayout.HORIZONTAL);
+        volBox.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(WRAP, WRAP);
+        vlp.leftMargin = px(18);
+
+        volumeIcon = new VolumeIcon();
+        int vIconSz = px(22);
+        volBox.addView(volumeIcon, new LinearLayout.LayoutParams(vIconSz, vIconSz));
+
+        volumeText = text(readVolume(), fMonoBold, 18, AMBER);
+        volumeText.setPadding(px(8), 0, 0, 0);
+        volBox.addView(volumeText);
+
+        volBox.setOnClickListener(v -> showVolumeSlider());
+
+        barRow.addView(volBox, vlp);
+        left.addView(barRow, brl);
+        updateVolume();
 
         day = text("", fMonoBold, 18, AMBER);
         day.setLetterSpacing(0.3f);
@@ -945,21 +1344,80 @@ public class HomeActivity extends Activity {
         LinearLayout g = new LinearLayout(this);
         g.setOrientation(LinearLayout.VERTICAL);
         int gap = px(12);
-        for (int r = 0; r < rows; r++) {
-            LinearLayout line = new LinearLayout(this);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            for (int c = 0; c < cols; c++) {
-                int idx = r * cols + c;
-                if (idx > SLOTS) break;
-                Tile t = new Tile(idx);
-                tiles[idx] = t;
+
+        for (int i = 0; i <= SLOTS; i++) tiles[i] = new Tile(i);
+
+        if (btWidgetActive() && !portrait && cols >= 3) {
+            if (btWidget == null) btWidget = new BtWidget(false);
+            LinearLayout topBlock = new LinearLayout(this);
+            topBlock.setOrientation(LinearLayout.HORIZONTAL);
+
+            // btWidget spans 2 columns (weight 2f)
+            LinearLayout.LayoutParams btlp = new LinearLayout.LayoutParams(gap, MATCH, 2f);
+            topBlock.addView(btWidget, btlp);
+
+            // Kolom kanan (weight cols - 2) memuat ubin baris 0 dan baris 1
+            LinearLayout rightCol = new LinearLayout(this);
+            rightCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams rclp = new LinearLayout.LayoutParams(0, MATCH, (float) (cols - 2));
+            rclp.leftMargin = gap;
+
+            LinearLayout rightRow0 = new LinearLayout(this);
+            rightRow0.setOrientation(LinearLayout.HORIZONTAL);
+            for (int c = 2; c < cols; c++) {
+                int idx = c;
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, MATCH, 1f);
-                if (c > 0) lp.leftMargin = gap;
-                line.addView(t, lp);
+                if (c > 2) lp.leftMargin = gap;
+                rightRow0.addView(tiles[idx], lp);
             }
-            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(MATCH, 0, 1f);
-            if (r > 0) rl.topMargin = gap;
-            g.addView(line, rl);
+            rightCol.addView(rightRow0, new LinearLayout.LayoutParams(MATCH, 0, 1f));
+
+            LinearLayout rightRow1 = new LinearLayout(this);
+            rightRow1.setOrientation(LinearLayout.HORIZONTAL);
+            for (int c = 2; c < cols; c++) {
+                int idx = cols + c;
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, MATCH, 1f);
+                if (c > 2) lp.leftMargin = gap;
+                rightRow1.addView(tiles[idx], lp);
+            }
+            LinearLayout.LayoutParams rr1lp = new LinearLayout.LayoutParams(MATCH, 0, 1f);
+            rr1lp.topMargin = gap;
+            rightCol.addView(rightRow1, rr1lp);
+
+            topBlock.addView(rightCol, rclp);
+            LinearLayout.LayoutParams tblp = new LinearLayout.LayoutParams(MATCH, gap, 2f);
+            g.addView(topBlock, tblp);
+
+            // Baris berikutnya (r >= 2)
+            for (int r = 2; r < rows; r++) {
+                LinearLayout line = new LinearLayout(this);
+                line.setOrientation(LinearLayout.HORIZONTAL);
+                for (int c = 0; c < cols; c++) {
+                    int idx = r * cols + c;
+                    if (idx > SLOTS) break;
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, MATCH, 1f);
+                    if (c > 0) lp.leftMargin = gap;
+                    line.addView(tiles[idx], lp);
+                }
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(MATCH, 0, 1f);
+                rl.topMargin = gap;
+                g.addView(line, rl);
+            }
+        } else {
+            for (int r = 0; r < rows; r++) {
+                LinearLayout line = new LinearLayout(this);
+                line.setOrientation(LinearLayout.HORIZONTAL);
+                for (int c = 0; c < cols; c++) {
+                    int idx = r * cols + c;
+                    if (idx > SLOTS) break;
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, MATCH, 1f);
+                    if (c > 0) lp.leftMargin = gap;
+                    line.addView(tiles[idx], lp);
+                }
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(MATCH, 0, 1f);
+                if (r > 0) rl.topMargin = gap;
+                g.addView(line, rl);
+            }
         }
         row.addView(g, portrait ? new LinearLayout.LayoutParams(MATCH, 0, 1f) : new LinearLayout.LayoutParams(0, MATCH, 1f));
         return row;
@@ -1076,6 +1534,7 @@ public class HomeActivity extends Activity {
         final Paint frame = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint disc = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint knob = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final TextPaint tagPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         final TextPaint title = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         final TextPaint sub = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         final TextPaint ini = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -1098,25 +1557,50 @@ public class HomeActivity extends Activity {
             frame.setStyle(Paint.Style.STROKE);
             frame.setStrokeWidth(px(1));
             frame.setColor(LINE);
+
+            tagPaint.setTypeface(fMonoBold);
+            tagPaint.setTextSize(sp(11));
+            tagPaint.setLetterSpacing(0.12f);
+            tagPaint.setFakeBoldText(true);
+
             title.setTypeface(fHeavy);
-            title.setTextSize(sp(19));
+            title.setTextSize(sp(17));
             title.setFakeBoldText(true);
             title.setColor(AMBER);
             title.setTextAlign(Paint.Align.CENTER);
+
             sub.setTypeface(fMonoBold);
-            sub.setTextSize(sp(12));
+            sub.setTextSize(sp(11));
             sub.setFakeBoldText(true);
             sub.setLetterSpacing(0.08f);
-            sub.setColor(AMBER);
+            sub.setColor(DIM);
             sub.setTextAlign(Paint.Align.CENTER);
+
             ini.setTypeface(fHeavy);
-            ini.setTextSize(sp(44));
+            ini.setTextSize(sp(36));
             ini.setTextAlign(Paint.Align.CENTER);
-            track = prefs.getString("btTrack", "");
-            artist = prefs.getString("btArtist", "");
-            track = clean(track, artist);
-            playing = prefs.getBoolean("btPlaying", false);
-            if (!track.isEmpty() || !artist.isEmpty()) load(++seq);
+
+            syncFromPrefs();
+        }
+
+        void syncFromPrefs() {
+            String t = clean(prefs.getString("btTrack", ""), prefs.getString("btArtist", ""));
+            String a = prefs.getString("btArtist", "");
+            boolean p = prefs.getBoolean("btPlaying", false);
+            boolean changed = false;
+            if (!t.equals(track) || !a.equals(artist)) {
+                track = t;
+                artist = a;
+                art = null;
+                seq++;
+                load(seq);
+                changed = true;
+            }
+            if (p != playing) {
+                playing = p;
+                changed = true;
+            }
+            if (changed) invalidate();
         }
 
         String clean(String t, String a) {
@@ -1145,6 +1629,35 @@ public class HomeActivity extends Activity {
             invalidate();
         }
 
+        /** Data dari sesi media BT: judul, artis, status putar, dan album art (bila dikirim ponsel). */
+        void session(String t, String a, boolean p, Bitmap bmp) {
+            String na = a == null ? "" : a.trim();
+            String nt = clean(t, na);
+            boolean changed = !nt.equals(track) || !na.equals(artist);
+            if (changed) {
+                track = nt;
+                artist = na;
+            }
+            if (bmp != null) {
+                art = bmp;
+                seq++;
+                changed = true;
+            } else if (changed) {
+                art = null;
+                seq++;
+                load(seq);
+            }
+            if (p != playing) {
+                playing = p;
+                changed = true;
+            }
+            if (changed) {
+                prefs.edit().putString("btTrack", track).putString("btArtist", artist)
+                        .putBoolean("btPlaying", playing).apply();
+                invalidate();
+            }
+        }
+
         int at(float x, float y) {
             if (rPrev.contains((int) x, (int) y)) return 2;
             if (rPlay.contains((int) x, (int) y)) return 1;
@@ -1157,14 +1670,25 @@ public class HomeActivity extends Activity {
             if (e.getAction() == MotionEvent.ACTION_DOWN) {
                 held = hit;
                 invalidate();
-                return hit != 0;
+                return true;
             }
             if (e.getAction() == MotionEvent.ACTION_UP) {
                 int was = held;
                 held = 0;
                 invalidate();
                 if (was != 0 && was == hit) {
-                    sendBroadcast(new Intent("com.nwd.ACTION_PLAY_BTMUSIC_CMD").putExtra("extra_command", was));
+                    MediaController c = btCtrl;
+                    if (c != null) {
+                        MediaController.TransportControls tc = c.getTransportControls();
+                        if (was == 2) tc.skipToPrevious();
+                        else if (was == 3) tc.skipToNext();
+                        else if (playing) tc.pause();
+                        else tc.play();
+                    } else {
+                        Tweaks.shellAsync("input keyevent " + (was == 2 ? 88 : was == 3 ? 87 : 85));
+                    }
+                } else if (was == 0 && hit == 0) {
+                    openBtMusicApp();
                 }
                 return true;
             }
@@ -1172,7 +1696,7 @@ public class HomeActivity extends Activity {
                 held = 0;
                 invalidate();
             }
-            return hit != 0;
+            return true;
         }
 
         void load(final int want) {
@@ -1222,7 +1746,7 @@ public class HomeActivity extends Activity {
             HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
             c.setConnectTimeout(6000);
             c.setReadTimeout(9000);
-            c.setRequestProperty("User-Agent", "KlikDash/1.0");
+            c.setRequestProperty("User-Agent", "KERE-HORE/1.0");
             try {
                 InputStream in = c.getInputStream();
                 ByteArrayOutputStream o = new ByteArrayOutputStream();
@@ -1244,10 +1768,12 @@ public class HomeActivity extends Activity {
         }
 
         @Override protected void onDraw(Canvas c) {
-            int w = getWidth(), h = getHeight(), pad = px(8);
+            int w = getWidth(), h = getHeight();
+            int pad = px(12);
             panel.setColor(PANEL);
             c.drawRect(0, 0, w, h, panel);
             float st = frame.getStrokeWidth() / 2f;
+            frame.setColor(LINE);
             c.drawRect(st, st, w - st, h - st, frame);
 
             if (horizontal) {
@@ -1298,13 +1824,47 @@ public class HomeActivity extends Activity {
                 return;
             }
 
-            int cs = Math.min(w - pad * 2, px(128));
-            int cx = (w - cs) / 2, cy = pad;
+            // --- Top tag bar ---
+            tagPaint.setColor(AMBER);
+            tagPaint.setTextAlign(Paint.Align.LEFT);
+            c.drawText("01  MUSIK", pad, pad + tagPaint.getTextSize(), tagPaint);
+
+            tagPaint.setTextAlign(Paint.Align.RIGHT);
+            if (playing) {
+                tagPaint.setColor(0xFF22C55E);
+                c.drawText("● SEDANG MEMUTAR", w - pad, pad + tagPaint.getTextSize(), tagPaint);
+            } else if (!track.isEmpty()) {
+                tagPaint.setColor(DIM);
+                c.drawText("JEDA", w - pad, pad + tagPaint.getTextSize(), tagPaint);
+            }
+
+            // --- Bottom media buttons ---
+            int gap = px(8);
+            int bh = px(44);
+            int bw = (w - pad * 2 - gap * 2) / 3;
+            int by = h - pad - bh;
+            rPrev.set(pad, by, pad + bw, by + bh);
+            rPlay.set(pad + bw + gap, by, pad + bw * 2 + gap, by + bh);
+            rNext.set(pad + (bw + gap) * 2, by, w - pad, by + bh);
+
+            key(c, rPrev, 2, held == 2);
+            key(c, rPlay, playing ? 3 : 1, held == 1);
+            key(c, rNext, 4, held == 3);
+
+            // --- Center content (Cover art, Track Title, Artist) ---
+            int topY = pad + (int) tagPaint.getTextSize() + px(8);
+            int availH = by - px(8) - topY;
+            int cs = Math.max(px(64), Math.min(availH - px(52), px(96)));
+            int cx = (w - cs) / 2;
+            int cy = topY + Math.max(0, (availH - cs - px(48)) / 3);
+
             dst.set(cx, cy, cx + cs, cy + cs);
             if (art != null) {
                 int iw = art.getWidth(), ih = art.getHeight(), side = Math.min(iw, ih);
                 src.set((iw - side) / 2, (ih - side) / 2, (iw + side) / 2, (ih + side) / 2);
                 c.drawBitmap(art, src, dst, null);
+                frame.setColor(LINE);
+                c.drawRect(dst, frame);
             } else {
                 int col = track.isEmpty() ? PANEL : palette[(track.hashCode() & 0x7fffffff) % palette.length];
                 disc.setStyle(Paint.Style.FILL);
@@ -1312,7 +1872,7 @@ public class HomeActivity extends Activity {
                 c.drawRect(dst, disc);
                 disc.setStyle(Paint.Style.STROKE);
                 disc.setStrokeWidth(px(1));
-                disc.setColor(track.isEmpty() ? LINE : DIM);
+                disc.setColor(LINE);
                 c.drawRect(dst, disc);
                 ini.setColor(track.isEmpty() ? FAINT : TEXT);
                 Paint.FontMetrics fm = ini.getFontMetrics();
@@ -1320,64 +1880,199 @@ public class HomeActivity extends Activity {
                 c.drawText(ch, cx + cs / 2f, cy + cs / 2f - (fm.ascent + fm.descent) / 2f, ini);
             }
 
-            float ty = cy + cs + px(28);
-            CharSequence t = TextUtils.ellipsize(track.isEmpty() ? "BT MUSIC" : track, title, w - pad * 2, TextUtils.TruncateAt.END);
+            float ty = cy + cs + px(20);
+            CharSequence t = TextUtils.ellipsize(track.isEmpty() ? "BLUETOOTH AUDIO" : track, title, w - pad * 2, TextUtils.TruncateAt.END);
             title.setColor(track.isEmpty() ? FAINT : AMBER);
             c.drawText(t, 0, t.length(), w / 2f, ty, title);
-            String a = artist.isEmpty() ? (track.isEmpty() ? "HUBUNGKAN PONSEL" : "") : artist;
-            CharSequence as = TextUtils.ellipsize(a, sub, w - pad * 2, TextUtils.TruncateAt.END);
-            sub.setColor(artist.isEmpty() ? DIM : AMBER);
-            c.drawText(as, 0, as.length(), w / 2f, ty + px(20), sub);
 
-            int gap = px(6), bh = px(60);
-            int bw = (w - pad * 2 - gap * 2) / 3;
-            int by = h - pad - bh;
-            rPrev.set(pad, by, pad + bw, by + bh);
-            rPlay.set(pad + bw + gap, by, pad + bw * 2 + gap, by + bh);
-            rNext.set(pad + (bw + gap) * 2, by, w - pad, by + bh);
-            key(c, rPrev, 2, held == 2);
-            key(c, rPlay, playing ? 3 : 1, held == 1);
-            key(c, rNext, 4, held == 3);
+            String a = artist.isEmpty() ? (track.isEmpty() ? "KETUK UNTUK MEMBUKA" : "") : artist;
+            CharSequence as = TextUtils.ellipsize(a, sub, w - pad * 2, TextUtils.TruncateAt.END);
+            sub.setColor(artist.isEmpty() ? DIM : TEXT);
+            c.drawText(as, 0, as.length(), w / 2f, ty + px(16), sub);
         }
 
         void key(Canvas c, Rect r, int kind, boolean on) {
             knob.setStyle(Paint.Style.FILL);
-            knob.setColor(on ? AMBER : PANEL);
+            knob.setColor(on ? AMBER : (kind == 1 || kind == 3 ? 0xFF1C1C1C : 0xFF161616));
             c.drawRect(r, knob);
-            frame.setColor(LINE);
+            frame.setColor(on ? AMBER : LINE);
             c.drawRect(r, frame);
-            knob.setColor(on ? INK : (track.isEmpty() ? FAINT : TEXT));
+            knob.setColor(on ? INK : (track.isEmpty() ? FAINT : (kind == 1 || kind == 3 ? AMBER : TEXT)));
             float x = r.exactCenterX(), y = r.exactCenterY();
-            float a = px(8), b = px(10);
+            float a = px(7), b = px(9);
             Path p = new Path();
-            if (kind == 1) {
+            if (kind == 1) { // PLAY
                 p.moveTo(x - a * .6f, y - b);
                 p.lineTo(x + a, y);
                 p.lineTo(x - a * .6f, y + b);
                 p.close();
                 c.drawPath(p, knob);
-            } else if (kind == 2) {
-                p.moveTo(x + a, y - b);
-                p.lineTo(x - a * .6f, y);
-                p.lineTo(x + a, y + b);
+            } else if (kind == 2) { // PREV
+                c.drawRect(x - a - px(2), y - b, x - a, y + b, knob);
+                p.moveTo(x + a * .6f, y - b);
+                p.lineTo(x - a, y);
+                p.lineTo(x + a * .6f, y + b);
+                p.close();
+                c.drawPath(p, knob);
+            } else if (kind == 3) { // PAUSE
+                c.drawRect(x - px(8), y - b, x - px(3), y + b, knob);
+                c.drawRect(x + px(3), y - b, x + px(8), y + b, knob);
+            } else { // NEXT
+                p.moveTo(x - a * .6f, y - b);
+                p.lineTo(x + a, y);
+                p.lineTo(x - a * .6f, y + b);
                 p.close();
                 c.drawPath(p, knob);
                 c.drawRect(x + a, y - b, x + a + px(2), y + b, knob);
-            } else if (kind == 3) {
-                c.drawRect(x - px(9), y - b, x - px(3), y + b, knob);
-                c.drawRect(x + px(3), y - b, x + px(9), y + b, knob);
-            } else {
-                p.moveTo(x - a, y - b);
-                p.lineTo(x + a * .6f, y);
-                p.lineTo(x - a, y + b);
-                p.close();
-                c.drawPath(p, knob);
-                c.drawRect(x + a * .6f, y - b, x + a * .6f + px(2), y + b, knob);
             }
         }
     }
 
 
+
+    /** Ikon kecil 14dp di bar atas: 0 = RAM (batang), 1 = CPU (chip), 2 = Suhu (termometer). Digambar, bukan emoji. */
+    class MiniIcon extends View {
+        final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final int kind;
+
+        MiniIcon(int kind, int color) {
+            super(HomeActivity.this);
+            this.kind = kind;
+            p.setColor(color);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(Math.max(1, dp));
+        }
+
+        void setColor(int color) {
+            if (p.getColor() != color) {
+                p.setColor(color);
+                invalidate();
+            }
+        }
+
+        @Override protected void onDraw(Canvas c) {
+            float w = getWidth(), h = getHeight();
+            float s = Math.min(w, h);
+            float l = (w - s) / 2f, t = (h - s) / 2f, r = l + s, b = t + s;
+            float pad = s * 0.08f;
+            if (kind == 0) {
+                p.setStyle(Paint.Style.STROKE);
+                c.drawRoundRect(new RectF(l + pad, t + pad, r - pad, b - pad), s * 0.14f, s * 0.14f, p);
+                p.setStyle(Paint.Style.FILL);
+                float bar = (s - pad * 2) / 5f;
+                for (int i = 1; i <= 3; i++) {
+                    float x = l + pad + bar * i;
+                    c.drawRect(x, t + pad * 2, x + bar * 0.55f, b - pad * 2, p);
+                }
+            } else if (kind == 1) {
+                float in = s * 0.22f;
+                p.setStyle(Paint.Style.STROKE);
+                c.drawRect(l + in, t + in, r - in, b - in, p);
+                float pin = s * 0.11f;
+                for (int i = 0; i < 3; i++) {
+                    float o = l + in + (s - in * 2) * (i + 0.5f) / 3f;
+                    c.drawLine(o, t, o, t + in, p);
+                    c.drawLine(o, b - in, o, b, p);
+                    float v = t + in + (s - in * 2) * (i + 0.5f) / 3f;
+                    c.drawLine(l, v, l + in, v, p);
+                    c.drawLine(r - in, v, r, v, p);
+                }
+            } else if (kind == 2) {
+                float cx = l + s * 0.5f;
+                float bulbR = s * 0.25f;
+                float hw = bulbR * 0.5f;
+                float bulbCy = b - pad - bulbR;
+                float topY = t + pad;
+                float joinY = bulbCy - 0.866025f * bulbR;
+
+                Path path = new Path();
+                RectF bulbRect = new RectF(cx - bulbR, bulbCy - bulbR, cx + bulbR, bulbCy + bulbR);
+                RectF topRect = new RectF(cx - hw, topY, cx + hw, topY + hw * 2f);
+
+                path.arcTo(bulbRect, 300f, 300f, false);
+                path.lineTo(cx - hw, topY + hw);
+                path.arcTo(topRect, 180f, 180f, false);
+                path.lineTo(cx + hw, joinY);
+                path.close();
+
+                p.setStyle(Paint.Style.STROKE);
+                c.drawPath(path, p);
+
+                p.setStyle(Paint.Style.FILL);
+                float inR = bulbR * 0.52f;
+                c.drawCircle(cx, bulbCy, inR, p);
+                float mw = hw * 0.5f;
+                float mercTop = topY + hw + (joinY - (topY + hw)) * 0.35f;
+                c.drawRoundRect(new RectF(cx - mw, mercTop, cx + mw, bulbCy), mw, mw, p);
+            }
+        }
+    }
+
+    /** Ikon volume (speaker) dinamis: merespons level volume dan status mute. */
+    class VolumeIcon extends View {
+        final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        int vol = -1;
+        int max = 40;
+
+        VolumeIcon() {
+            super(HomeActivity.this);
+            p.setColor(AMBER);
+            p.setStrokeWidth(Math.max(1.5f, dp * 1.5f));
+            p.setStrokeCap(Paint.Cap.ROUND);
+        }
+
+        void setVolume(int vol, int max) {
+            if (this.vol != vol || this.max != max) {
+                this.vol = vol;
+                this.max = max;
+                invalidate();
+            }
+        }
+
+        @Override protected void onDraw(Canvas c) {
+            float w = getWidth(), h = getHeight();
+            float s = Math.min(w, h);
+            float l = (w - s) / 2f, t = (h - s) / 2f;
+            float pad = s * 0.08f;
+            float cy = t + s * 0.5f;
+
+            // Speaker body (kotak belakang + corong depan)
+            Path cone = new Path();
+            float backW = s * 0.18f;
+            float coneW = s * 0.28f;
+            float coneRight = l + pad + backW + coneW;
+
+            cone.moveTo(l + pad, cy - s * 0.16f);
+            cone.lineTo(l + pad + backW, cy - s * 0.16f);
+            cone.lineTo(coneRight, cy - s * 0.36f);
+            cone.lineTo(coneRight, cy + s * 0.36f);
+            cone.lineTo(l + pad + backW, cy + s * 0.16f);
+            cone.lineTo(l + pad, cy + s * 0.16f);
+            cone.close();
+
+            p.setStyle(Paint.Style.FILL);
+            c.drawPath(cone, p);
+
+            // Gelombang suara / tanda silang jika bisu (mute)
+            p.setStyle(Paint.Style.STROKE);
+            if (vol <= 0) {
+                float xc = coneRight + s * 0.22f;
+                float xs = s * 0.11f;
+                c.drawLine(xc - xs, cy - xs, xc + xs, cy + xs, p);
+                c.drawLine(xc - xs, cy + xs, xc + xs, cy - xs, p);
+            } else {
+                float r1 = s * 0.22f;
+                RectF a1 = new RectF(coneRight - r1, cy - r1, coneRight + r1, cy + r1);
+                c.drawArc(a1, -45f, 90f, false, p);
+
+                if (vol > max * 0.3f) {
+                    float r2 = s * 0.38f;
+                    RectF a2 = new RectF(coneRight - r2, cy - r2, coneRight + r2, cy + r2);
+                    c.drawArc(a2, -45f, 90f, false, p);
+                }
+            }
+        }
+    }
 
     class SpeedGauge extends View {
         final Paint panel = new Paint();
@@ -1496,12 +2191,11 @@ public class HomeActivity extends Activity {
             small.setLetterSpacing(0.15f);
             setClickable(true);
             setOnClickListener(v -> {
-                if (btWidgetActive() && isBtSlot(idx)) return;
                 if (idx == SLOTS) { openDrawer(-1); return; }
                 App a = appFor(idx);
                 if (a == null) openDrawer(idx); else launch(a.cn);
             });
-            if (idx < SLOTS && !(btWidgetActive() && isBtSlot(idx))) {
+            if (idx < SLOTS) {
                 // Tekan lama: geser ke ubin lain = tukar posisi; lepas di tempat = pilih aplikasi.
                 setOnLongClickListener(v -> {
                     v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
@@ -1534,10 +2228,6 @@ public class HomeActivity extends Activity {
                     }
                     return true;
                 });
-            } else             if (btWidgetActive() && inBtArea(idx)) {
-                setLongClickable(false);
-                setOnDragListener(null);
-                setClickable(false);
             }
         }
 
@@ -1561,28 +2251,6 @@ public class HomeActivity extends Activity {
         }
 
         @Override protected void onDraw(Canvas c) {
-            if (btWidgetActive() && inBtArea(idx)) {
-                if (idx != 0) {
-                    // fill entire tile area as part of big widget without border
-                    if (btWidget == null) btWidget = new BtWidget(true);
-                    int w = getWidth(), h = getHeight();
-                    int ox = 0, oy = 0;
-                    if (idx == 1) { ox = -w - px(12); oy = 0; }
-                    if (idx == 3) { ox = 0; oy = -h - px(12); }
-                    if (idx == 4) { ox = -w - px(12); oy = -h - px(12); }
-                    btWidget.draw(c);
-                    drawDragState(c);
-                    return;
-                }
-                if (btWidget == null) btWidget = new BtWidget(true);
-                drawFrame(c);
-                int w = getWidth(), h = getHeight();
-                btWidget.measure(MeasureSpec.makeMeasureSpec(w * 2 + px(12), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h * 2 + px(12), MeasureSpec.EXACTLY));
-                btWidget.layout(0, 0, w * 2 + px(12), h * 2 + px(12));
-                btWidget.draw(c);
-                drawDragState(c);
-                return;
-            }
             drawFrame(c);
             int w = getWidth(), h = getHeight();
             float k = Math.max(0.55f, Math.min(1.25f, Math.min(w / (float) px(180), h / (float) px(190))));
@@ -1591,16 +2259,10 @@ public class HomeActivity extends Activity {
             boolean all = idx == SLOTS;
             App a = all ? null : appFor(idx);
 
-            if (!(btWidgetActive() && isBtSlot(idx))) {
-            if (!(btWidgetActive() && inBtArea(idx))) {
-                small.setColor(down ? INK : (idx < cols ? AMBER : DIM));
-                c.drawText(String.format(Locale.US, "%02d", idx + 1), m, m + small.getTextSize(), small);
-            } else {
-                // hide number
-            }
-            }
+            small.setColor(down ? INK : (idx < cols ? AMBER : DIM));
+            c.drawText(String.format(Locale.US, "%02d", idx + 1), m, m + small.getTextSize(), small);
 
-            int icon = Math.round(px(60) * k * (btWidgetActive() && isBtSlot(idx) ? 0 : 1));
+            int icon = Math.round(px(60) * k);
             String name, sub = null;
             if (all) {
                 int cell = Math.round(px(14) * k), g = Math.round(px(7) * k), x0 = w - m - (cell * 3 + g * 2);
@@ -1613,10 +2275,6 @@ public class HomeActivity extends Activity {
                 }
                 name = "SEMUA";
                 sub = "APLIKASI  →";
-            } else             if (btWidgetActive() && inBtArea(idx) && idx != 1) {
-                return;
-            } else if (btWidgetActive() && isBtSlot(idx)) {
-                return;
             } else if (a != null) {
                 int ic = Math.round(px(84) * k);
                 drawIcon(c, a.icon, w - m - ic, m, ic, true);

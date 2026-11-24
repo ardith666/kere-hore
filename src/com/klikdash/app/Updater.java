@@ -31,7 +31,7 @@ import java.util.Map;
  * KlikDash yang terpasang (Android juga menolak pembaruan dengan kunci lain, ini cek lebih awal + pesan jelas).
  */
 final class Updater {
-    static final String LATEST = "https://api.github.com/repos/ashafizullah/klikdash/releases/latest";
+    static final String LATEST = "https://api.github.com/repos/ardith666/klikdash/releases/latest";
     static final String ACTION_STATUS = "com.klikdash.app.INSTALL_STATUS";
 
     static final class Release {
