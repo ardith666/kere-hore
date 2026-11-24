@@ -193,8 +193,45 @@ public class SettingsActivity extends Activity {
                         show(TAB_THEME, true);
                     })));
         }
+
+        // Tentang Head Unit (Spek Asli)
+        list.addView(row("TENTANG HEAD UNIT (SPEK ASLI)", realHuSpecs()));
+
         sv.addView(list);
         return sv;
+    }
+
+    private String realHuSpecs() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Model: ").append(android.os.Build.MANUFACTURER).append(" ").append(android.os.Build.MODEL)
+          .append(" (").append(android.os.Build.HARDWARE).append(")\n");
+        sb.append("Android: ").append(android.os.Build.VERSION.RELEASE)
+          .append(" (API ").append(android.os.Build.VERSION.SDK_INT).append(")\n");
+        sb.append("CPU: ").append(Runtime.getRuntime().availableProcessors()).append(" Cores | ABI: ")
+          .append(android.os.Build.SUPPORTED_ABIS.length > 0 ? android.os.Build.SUPPORTED_ABIS[0] : "-").append("\n");
+        try {
+            android.os.StatFs dev = new android.os.StatFs("/dev");
+            long realRamMb = (dev.getTotalBytes() * 2L) / 1048576L;
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            long availMb = mi.availMem / 1048576L;
+            sb.append("RAM Asli: ~").append(realRamMb).append(" MB (Tersedia: ").append(availMb).append(" MB)\n");
+        } catch (Throwable ignored) {}
+        try {
+            android.os.StatFs data = new android.os.StatFs(android.os.Environment.getDataDirectory().getPath());
+            double totGb = data.getTotalBytes() / (1024.0 * 1024.0 * 1024.0);
+            double freeGb = data.getAvailableBytes() / (1024.0 * 1024.0 * 1024.0);
+            sb.append(String.format(java.util.Locale.US, "Storage Asli: %.1f GB (Sisa: %.1f GB)\n", totGb, freeGb));
+        } catch (Throwable ignored) {}
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader("/sys/class/thermal/thermal_zone0/temp"))) {
+            int t = Integer.parseInt(br.readLine().trim());
+            if (t > 1000) t /= 1000;
+            sb.append("Suhu CPU: ").append(t).append("°C");
+        } catch (Throwable ignored) {
+            sb.append("Suhu CPU: -");
+        }
+        return sb.toString();
     }
 
     // ---------------------------------------------------------------- tab Launcher
