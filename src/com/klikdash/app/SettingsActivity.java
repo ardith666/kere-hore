@@ -42,11 +42,12 @@ public class SettingsActivity extends Activity {
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final Locale ID = new Locale("id", "ID");
     static final String EXTRA_TAB = "tab";
-    static final int TAB_LAUNCHER = 0, TAB_POWER = 1, TAB_THEME = 2;
+    static final int TAB_LAUNCHER = 0, TAB_POWER = 1, TAB_THEME = 2, TAB_HU = 3;
     static final String[][] TABS = {
             {"LAUNCHER", "TAMPILAN & PINTASAN"},
             {"HEMAT DAYA", "APLIKASI DI LATAR"},
             {"TEMA", "AKSEN & WARNA"},
+            {"SPEK HU", "HARDWARE ASLI"},
     };
 
     float dp, sp, wDp, hDp, railDp;
@@ -169,6 +170,8 @@ public class SettingsActivity extends Activity {
             v = power.view;
         } else if (tab == TAB_THEME) {
             v = themePanel();
+        } else if (tab == TAB_HU) {
+            v = huPanel();
         } else {
             v = launcherPanel();
         }
@@ -194,9 +197,16 @@ public class SettingsActivity extends Activity {
                     })));
         }
 
-        // Tentang Head Unit (Spek Asli)
-        list.addView(row("TENTANG HEAD UNIT (SPEK ASLI)", realHuSpecs()));
+        sv.addView(list);
+        return sv;
+    }
 
+    View huPanel() {
+        ScrollView sv = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(px(28), px(20), px(28), px(28));
+        list.addView(row("TENTANG HEAD UNIT (SPEK ASLI)", realHuSpecs()));
         sv.addView(list);
         return sv;
     }
