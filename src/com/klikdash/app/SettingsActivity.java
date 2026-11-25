@@ -417,7 +417,7 @@ public class SettingsActivity extends Activity {
             try {
                 java.io.File apk = Updater.download(this, rel, pct -> runOnUiThread(() -> prog.setMessage(pct + "%")));
                 runOnUiThread(() -> {
-                    prog.setMessage("Memasang… KERE-HORE akan tertutup sebentar lalu terbuka lagi.");
+                    prog.dismiss();
                     Updater.install(this, apk, () -> runOnUiThread(() -> {
                         prog.dismiss();
                         android.widget.Toast.makeText(this, "Izinkan KERE-HORE memasang aplikasi, lalu cek update lagi",
