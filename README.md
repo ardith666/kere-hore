@@ -46,8 +46,7 @@ adb -s <IP_HU>:5555 install -r build/kere-hore.apk
 | | |
 |---|---|
 | ![Screenshot 1](docs/img/IMG_2102.PNG) | ![Screenshot 2](docs/img/IMG_2103.PNG) |
-| ![Screenshot 3](docs/img/IMG_2104.PNG) | ![Screenshot 4](docs/img/IMG_2105.PNG) |
-| ![Screenshot 5](docs/img/IMG_2106.PNG) | |
+| ![Screenshot 3](docs/img/IMG_2105.PNG) | ![Screenshot 4](docs/img/IMG_2106.PNG) |
 
 ---
 
