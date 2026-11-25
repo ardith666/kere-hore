@@ -85,6 +85,7 @@ public class QuranActivity extends Activity {
     }
 
     // Layar pembuka: memuat teks, atau menawarkan unduh sekali bila APK tidak membawa teks.
+    android.widget.Button dlAllBtn;
     LinearLayout overlay;
     TextView loadSub;
     Chip loadBtn;
@@ -231,7 +232,7 @@ public class QuranActivity extends Activity {
         surahList.setOnItemClickListener((p, v, pos, id) -> open(pos + 1, 1));
         left.addView(surahList, new LinearLayout.LayoutParams(MATCH, 0, 1f));
 
-        android.widget.Button dlAllBtn = new android.widget.Button(this);
+        dlAllBtn = new android.widget.Button(this);
         dlAllBtn.setText("Unduh Semua Audio (Offline)");
         dlAllBtn.setTextSize(12);
         dlAllBtn.setTextColor(0xFFFFFFFF);
@@ -413,6 +414,17 @@ public class QuranActivity extends Activity {
 
     /** Dipanggil saat status pemutar berubah: perbarui bar, sorot ayat, ikuti bacaan. */
     void refreshPlayer() {
+        if (dlAllBtn != null) {
+            if (QuranService.dlAllRunning) {
+                dlAllBtn.setText("Mengunduh Surah " + QuranService.dlSurah + "/114 (" + QuranService.dlDone + "/" + QuranService.dlTotal + ")");
+                dlAllBtn.setEnabled(false);
+            } else if (QuranService.isAllDownloaded(this)) {
+                dlAllBtn.setVisibility(View.GONE);
+            } else {
+                dlAllBtn.setText("Unduh Semua Audio (Offline)");
+                dlAllBtn.setEnabled(true);
+            }
+        }
         if (!QuranData.loaded()) return;
         int s = QuranService.surah, a = QuranService.ayah;
         QuranData.Surah q = QuranData.get(s);

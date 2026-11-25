@@ -125,7 +125,9 @@ public class QuranService extends Service
                             } catch (Throwable ignored) {}
                         }
                         dlDone = a;
-                        main.post(QuranService::notifyListeners);
+                        if (a == 1 || a == total || a % 5 == 0) {
+                            main.post(QuranService::notifyListeners);
+                        }
                     }
                 }
             } catch (Throwable ignored) {
