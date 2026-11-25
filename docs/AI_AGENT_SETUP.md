@@ -55,7 +55,7 @@ adb -s <IP_HU>:<PORT> shell pm uninstall -k --user 0 com.google.android.apps.map
 ./build.sh
 
 # Instal ke HU
-adb -s <IP_HU>:<PORT> install -r build/klikdash.apk
+adb -s <IP_HU>:<PORT> install -r build/kere-hore.apk
 
 # Jadikan launcher default (opsional, tergantung firmware)
 adb -s <IP_HU>:<PORT> shell cmd package set-home-activity com.klikdash.app/.HomeActivity

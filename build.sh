@@ -66,18 +66,18 @@ if [ -z "$KS_PASS" ]; then
 fi
 
 "$BT/apksigner" sign --ks klikdash.keystore --ks-pass env:KS_PASS --key-pass env:KS_PASS \
-    --out build/klikdash.apk build/aligned.apk
+    --out build/kere-hore.apk build/aligned.apk
 
 if [ "$MODE" = "release" ]; then
-    cp build/klikdash.apk "build/klikdash-$VERSION_NAME.apk"
+    cp build/kere-hore.apk "build/klikdash-$VERSION_NAME.apk"
     unzip -l "build/klikdash-$VERSION_NAME.apk" | grep -q "assets/quran.txt" && { echo "quran.txt ikut di APK rilis!" >&2; exit 1; }
     ls -lh "build/klikdash-$VERSION_NAME.apk"
 else
-    ls -lh build/klikdash.apk
+    ls -lh build/kere-hore.apk
 fi
 
 if [ "$MODE" = "install" ]; then
-    adb -s "$DEVICE" install -r build/klikdash.apk
+    adb -s "$DEVICE" install -r build/kere-hore.apk
     adb -s "$DEVICE" shell pm grant com.klikdash.app android.permission.ACCESS_FINE_LOCATION
     adb -s "$DEVICE" shell pm grant com.klikdash.app android.permission.ACCESS_COARSE_LOCATION
     adb -s "$DEVICE" shell cmd package set-home-activity com.klikdash.app/.HomeActivity

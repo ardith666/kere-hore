@@ -34,7 +34,7 @@ Lihat panduan lengkap step-by-step di [docs/AI_AGENT_SETUP.md](docs/AI_AGENT_SET
 ```bash
 ./build.sh
 adb connect <IP_HU>:5555
-adb -s <IP_HU>:5555 install -r build/klikdash.apk
+adb -s <IP_HU>:5555 install -r build/kere-hore.apk
 ```
 
 ---
