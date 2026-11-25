@@ -2,7 +2,7 @@
 
 **KERE-HORE** adalah launcher ringan untuk Head Unit (HU) Android spesifikasi terbatas (*kere-hore*), dibangun tanpa animasi berat dan tanpa library eksternal.
 
-![KERE-HORE Head Unit](docs/img/HU.jpg)
+![KERE-HORE Head Unit](docs/img/HU.jpeg)
 
 ---
 
