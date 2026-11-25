@@ -30,7 +30,14 @@
 
 ## Instalasi, Debloat & Panduan AI Agent
 
-Lihat panduan lengkap step-by-step di [docs/AI_AGENT_SETUP.md](docs/AI_AGENT_SETUP.md) untuk mengaktifkan Developer Mode, koneksi ADB (`5555`/`8555`), debloat aman, instalasi APK, dan optimasi HU.
+### Cara Membuka Developer Mode & Aktifkan USB Debugging di HU
+1. Buka **Settings (Pengaturan)** -> **System / Car Settings / About Device**.
+2. Jika diminta **PIN / Password Developer atau Factory Settings**, coba:
+   - **Tanggal hari ini:** `YYYY-MM-DD` atau `YYYYMMDD` (contoh: `2026-11-25` atau `20261125`).
+   - **Kode umum HU Android:** `123456`, `8888`, `3368`, `1617`, `7890`, `0000`.
+3. Aktifkan **Developer Options**, lalu nyalakan **USB Debugging** dan **ADB over Network / Wireless Debugging** (port default `5555`, beberapa firmware `8555`).
+
+Lihat panduan lengkap step-by-step untuk AI Agent (debloat & optimasi HU) di [docs/AI_AGENT_SETUP.md](docs/AI_AGENT_SETUP.md).
 
 ### Build dari Source
 ```bash
