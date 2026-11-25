@@ -47,4 +47,8 @@
 3. **QR Code Generator (`QrCodeUtil.java`):**
    * Generator QR Code pure Java ke `android.graphics.Bitmap` tanpa dependency eksternal.
 4. **Offline Quran (`QuranService.java` / `QuranActivity.java`):**
-   * Background downloader dengan `HttpURLConnection` yang mengunduh MP3 per surah/ayat ke `getExternalFilesDir("quran_audio")` atau `getFilesDir()/quran_audio/`, melewati file yang sudah ada, dan memutar dari file lokal jika tersedia.
+   * Background downloader dengan `HttpURLConnection` yang mengunduh MP3 (pilihan LQ 64kbps / HQ 128kbps) ke `getExternalFilesDir(null)/quran/audio`, melewati file yang sudah ada, dan memutar dari file lokal jika tersedia.
+5. **GPS Trip Logger (`TripLogger.java`):**
+   * Pencatatan GPS ringan dengan filter bergerak (`>= 200m` atau `>= 60s` dengan lokasi berbeda `>= 25m`) dan deduplikasi parkir (`< 25m` & `0 km/j` hanya update `endTs`).
+   * Smart file splitting di `trips/trip_<tripId>_part<N>.json` dengan batas **5 MB per file** dan `tripUuid` sebagai penanda relasi antar file.
+   * Mendukung hapus per trip (`clearTrip`) dan hapus semua (`clear`) dengan jeda konfirmasi 10 detik di Webserver.

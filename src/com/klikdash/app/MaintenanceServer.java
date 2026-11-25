@@ -84,8 +84,16 @@ public final class MaintenanceServer {
                 res.put("trips", TripLogger.load(ctx));
                 byte[] body = res.toString().getBytes(StandardCharsets.UTF_8);
                 writeResponse(out, "200 OK", "application/json; charset=utf-8", body);
-            } else if ("POST".equals(method) && "/api/trips/clear".equals(path)) {
-                TripLogger.clear(ctx);
+            } else if ("POST".equals(method) && path.startsWith("/api/trips/clear")) {
+                int q = path.indexOf("tripId=");
+                if (q >= 0) {
+                    try {
+                        long tid = Long.parseLong(path.substring(q + 7).trim());
+                        TripLogger.clearTrip(ctx, tid);
+                    } catch (Throwable ignored) {}
+                } else {
+                    TripLogger.clear(ctx);
+                }
                 writeResponse(out, "200 OK", "application/json; charset=utf-8", "{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
             } else if ("POST".equals(method) && "/api/data".equals(path)) {
                 char[] buf = new char[contentLength];
@@ -205,6 +213,7 @@ public final class MaintenanceServer {
             + "<p id='tripSize' class='text-xs text-slate-400'>Total Data: -</p></div>"
             + "<div class='flex gap-2'>"
             + "<button onclick='exportGpx()' class='px-2.5 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 text-xs'>Export GPX</button>"
+            + "<button onclick='clearThisTrip()' class='px-2.5 py-1 rounded-lg bg-amber-600/30 text-amber-300 text-xs'>Hapus Trip Ini</button>"
             + "<button onclick='clearTrips()' class='px-2.5 py-1 rounded-lg bg-rose-600/30 text-rose-300 text-xs'>Bersihkan</button>"
             + "</div></div>"
             + "<div class='flex flex-wrap gap-2 mb-3'>"
@@ -291,7 +300,10 @@ public final class MaintenanceServer {
             + "let gpx='<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\"><trk><name>KERE-HORE Trip</name><trkseg>';"
             + "arr.forEach(x=>{gpx+=`<trkpt lat=\"${x.lat}\" lon=\"${x.lon}\"><time>${x.ts.replace(' ','T')}Z</time></trkpt>`;});"
             + "gpx+='</trkseg></trk></gpx>';const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([gpx],{type:'application/gpx+xml'}));a.download='kere-hore-trip.gpx';a.click();}"
-            + "function clearTrips(){let sec=10,iv=null;Swal.fire({title:'Hapus Semua History GPS?',html:'<b>PERINGATAN:</b> Data yang dihapus <b>tidak dapat dikembalikan</b>!<br><br>Tunggu <b id=\"cd\">10</b> detik...',icon:'warning',showCancelButton:true,confirmButtonColor:'#e11d48',cancelButtonColor:'#334155',confirmButtonText:'Hapus (10)',cancelButtonText:'Batal',background:'#0f172a',color:'#f8fafc',didOpen:()=>{const btn=Swal.getConfirmButton();btn.disabled=true;iv=setInterval(()=>{sec--;const el=document.getElementById('cd');if(el)el.innerText=sec;if(sec<=0){clearInterval(iv);btn.disabled=false;btn.innerText='Ya, Hapus Permanen';}else{btn.innerText='Hapus ('+sec+')';}},1000);},willClose:()=>{if(iv)clearInterval(iv);}}).then(async r=>{if(r.isConfirmed){await fetch('/api/trips/clear',{method:'POST'});loadTrips();toast('History GPS dibersihkan');}});}"
+            + "function clearThisTrip(){const v=document.getElementById('tripSel').value;if(v==='all'){Swal.fire({icon:'info',title:'Pilih salah satu perjalanan dulu',background:'#0f172a',color:'#f8fafc'});return;}"
+            + "confirm10s('Hapus Perjalanan Ini?','/api/trips/clear?tripId='+v,'Trip dihapus');}"
+            + "function clearTrips(){confirm10s('Hapus Semua History GPS?','/api/trips/clear','History GPS dibersihkan');}"
+            + "function confirm10s(title,url,doneMsg){let sec=10,iv=null;Swal.fire({title,html:'<b>PERINGATAN:</b> Data yang dihapus <b>tidak dapat dikembalikan</b>!<br><br>Tunggu <b id=\"cd\">10</b> detik...',icon:'warning',showCancelButton:true,confirmButtonColor:'#e11d48',cancelButtonColor:'#334155',confirmButtonText:'Hapus (10)',cancelButtonText:'Batal',background:'#0f172a',color:'#f8fafc',didOpen:()=>{const btn=Swal.getConfirmButton();btn.disabled=true;iv=setInterval(()=>{sec--;const el=document.getElementById('cd');if(el)el.innerText=sec;if(sec<=0){clearInterval(iv);btn.disabled=false;btn.innerText='Ya, Hapus Permanen';}else{btn.innerText='Hapus ('+sec+')';}},1000);},willClose:()=>{if(iv)clearInterval(iv);}}).then(async r=>{if(r.isConfirmed){await fetch(url,{method:'POST'});loadTrips();toast(doneMsg);}});}"
             + "function renderAnalytics(){const ctx=document.getElementById('chartKm').getContext('2d');"
             + "const labels=(state.parts||[]).map(p=>p.name);const data=(state.parts||[]).map(p=>effTarget(p)-(state.currentKm||0));"
             + "if(chartObj)chartObj.destroy();chartObj=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Sisa KM',data,backgroundColor:data.map(v=>v<=0?'#fb7185':(v<=1000?'#fbbf24':'#34d399'))}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#94a3b8'}},x:{ticks:{color:'#94a3b8'}}}}});"

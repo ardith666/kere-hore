@@ -392,24 +392,6 @@ public class MaintenanceActivity extends Activity {
             .setTitle("History GPS (" + arr.length() + " titik | " + TripLogger.getStorageSizeText(this) + ")")
             .setMessage(sb.toString())
             .setPositiveButton("Tutup", null)
-            .setNeutralButton("Bersihkan", (d, w) -> {
-                AlertDialog cd = new AlertDialog.Builder(this)
-                    .setTitle("Hapus Semua History GPS?")
-                    .setMessage("PERINGATAN: Data yang dihapus tidak dapat dikembalikan!\n\nTunggu 10 detik sebelum menghapus.")
-                    .setPositiveButton("Hapus (10)", (d2, w2) -> {
-                        TripLogger.clear(this);
-                        Toast.makeText(this, "History GPS dibersihkan", Toast.LENGTH_SHORT).show();
-                    })
-                    .setNegativeButton("Batal", null)
-                    .create();
-                cd.show();
-                final android.widget.Button btn = cd.getButton(AlertDialog.BUTTON_POSITIVE);
-                btn.setEnabled(false);
-                new android.os.CountDownTimer(10000, 1000) {
-                    @Override public void onTick(long ms) { btn.setText("Hapus (" + (ms / 1000 + 1) + ")"); }
-                    @Override public void onFinish() { btn.setEnabled(true); btn.setText("Ya, Hapus Permanen"); }
-                }.start();
-            })
             .show();
     }
 
