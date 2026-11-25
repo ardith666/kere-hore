@@ -682,6 +682,8 @@ public class HomeActivity extends Activity {
     private int accentColor = AMBER;
     private TextView topTagView;
     private TextView maintWidgetView;
+    private TextView maintSwotView;
+    private LinearLayout maintWidgetRow;
 
     private void addMaintenanceOverlay(FrameLayout root) {
         refreshMaintenanceOverlay();
@@ -692,15 +694,15 @@ public class HomeActivity extends Activity {
             topTagView.setText(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US));
             topTagView.setTextColor(prefs.getInt("themeAccent", AMBER));
         }
-        if (maintWidgetView != null) {
+        if (maintWidgetRow != null) {
             if (!MaintenanceStore.isWidgetEnabled(this)) {
-                maintWidgetView.setVisibility(View.GONE);
+                maintWidgetRow.setVisibility(View.GONE);
                 return;
             }
             org.json.JSONObject data = MaintenanceStore.load(this);
             java.util.List<org.json.JSONObject> parts = MaintenanceStore.getNearestParts(this, 3);
             if (parts.isEmpty()) {
-                maintWidgetView.setVisibility(View.GONE);
+                maintWidgetRow.setVisibility(View.GONE);
                 return;
             }
             int cur = data.optInt("currentKm", 0);
@@ -712,7 +714,26 @@ public class HomeActivity extends Activity {
                 sb.append("• ").append(p.optString("name", "Part")).append(" (Sisa ").append(MaintenanceStore.fmtKm(rem)).append(" km)");
             }
             maintWidgetView.setText(sb.toString());
-            maintWidgetView.setVisibility(View.VISIBLE);
+
+            if (maintSwotView != null) {
+                org.json.JSONArray all = data.optJSONArray("parts");
+                int tot = all == null ? 0 : all.length();
+                int crit = 0, warn = 0;
+                if (all != null) {
+                    for (int i = 0; i < all.length(); i++) {
+                        org.json.JSONObject p = all.optJSONObject(i);
+                        if (p == null) continue;
+                        int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
+                        if (rem <= 0) crit++;
+                        else if (rem <= 1000) warn++;
+                    }
+                }
+                String swot = "SWOT (" + tot + " Part)\n"
+                    + (crit > 0 ? "• Kritis: " + crit + " (Segera ganti)\n" : "• Semua part aman\n")
+                    + (warn > 0 ? "• Mendekati: " + warn + " part" : "• Jadwal terjaga");
+                maintSwotView.setText(swot);
+            }
+            maintWidgetRow.setVisibility(View.VISIBLE);
         }
     }
 
@@ -1266,14 +1287,26 @@ public class HomeActivity extends Activity {
         }
         left.addView(clockRow, new LinearLayout.LayoutParams(MATCH, WRAP));
 
+        maintWidgetRow = new LinearLayout(this);
+        maintWidgetRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams mwp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        mwp.topMargin = px(8);
+
         maintWidgetView = new TextView(this);
         maintWidgetView.setTextColor(0xFFCBD5E1);
         maintWidgetView.setTextSize(11);
         maintWidgetView.setLineSpacing(px(2), 1f);
-        LinearLayout.LayoutParams mwp = new LinearLayout.LayoutParams(MATCH, WRAP);
-        mwp.topMargin = px(8);
-        maintWidgetView.setOnClickListener(v -> startActivity(new Intent(this, MaintenanceActivity.class)));
-        left.addView(maintWidgetView, mwp);
+        maintWidgetRow.addView(maintWidgetView, new LinearLayout.LayoutParams(0, WRAP, 1.35f));
+
+        maintSwotView = new TextView(this);
+        maintSwotView.setTextColor(0xFF94A3B8);
+        maintSwotView.setTextSize(11);
+        maintSwotView.setLineSpacing(px(2), 1f);
+        maintSwotView.setPadding(px(16), 0, 0, 0);
+        maintWidgetRow.addView(maintSwotView, new LinearLayout.LayoutParams(0, WRAP, 1f));
+
+        maintWidgetRow.setOnClickListener(v -> startActivity(new Intent(this, MaintenanceActivity.class)));
+        left.addView(maintWidgetRow, mwp);
         refreshMaintenanceOverlay();
 
         LinearLayout barRow = new LinearLayout(this);
