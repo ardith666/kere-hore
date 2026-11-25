@@ -2,6 +2,8 @@
 
 **KERE-HORE** adalah launcher ringan untuk Head Unit (HU) Android spesifikasi terbatas (*kere-hore*), dibangun tanpa animasi berat dan tanpa library eksternal.
 
+![KERE-HORE Head Unit](docs/img/HU.jpg)
+
 ---
 
 ## Fitur Utama
@@ -36,6 +38,16 @@ Lihat panduan lengkap step-by-step di [docs/AI_AGENT_SETUP.md](docs/AI_AGENT_SET
 adb connect <IP_HU>:5555
 adb -s <IP_HU>:5555 install -r build/kere-hore.apk
 ```
+
+---
+
+## Tangkapan Layar Lainnya
+
+| | |
+|---|---|
+| ![Screenshot 1](docs/img/IMG_2102.PNG) | ![Screenshot 2](docs/img/IMG_2103.PNG) |
+| ![Screenshot 3](docs/img/IMG_2104.PNG) | ![Screenshot 4](docs/img/IMG_2105.PNG) |
+| ![Screenshot 5](docs/img/IMG_2106.PNG) | |
 
 ---
 
