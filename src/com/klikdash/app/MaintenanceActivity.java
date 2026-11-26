@@ -69,6 +69,14 @@ public class MaintenanceActivity extends Activity {
         btnGps.setOnClickListener(v -> showGpsDialog());
         header.addView(btnGps);
 
+        Button btnBbm = makeBtn("+ BBM", "#2563EB");
+        btnBbm.setOnClickListener(v -> showFuelDialog());
+        header.addView(btnBbm);
+
+        Button btnDok = makeBtn("Dokumen", "#9333EA");
+        btnDok.setOnClickListener(v -> showDocsDialog());
+        header.addView(btnDok);
+
         serverBtn = makeBtn("Aktifkan Server", "#7C3AED");
         serverBtn.setOnClickListener(v -> toggleServer());
         header.addView(serverBtn);
@@ -370,8 +378,10 @@ public class MaintenanceActivity extends Activity {
             .setTitle("Analisis SWOT & Insight")
             .setMessage(msg)
             .setPositiveButton("Tutup", null)
+            .setNeutralButton("Atur Pengingat", (d, w) -> showReminderDaysDialog())
             .show();
     }
+
 
     private void showGpsDialog() {
         JSONArray arr = TripLogger.load(this);
@@ -392,6 +402,118 @@ public class MaintenanceActivity extends Activity {
             .setTitle("History GPS (" + arr.length() + " titik | " + TripLogger.getStorageSizeText(this) + ")")
             .setMessage(sb.toString())
             .setPositiveButton("Tutup", null)
+            .setNeutralButton("Atur Pengingat", (d, w) -> showReminderDaysDialog())
+            .show();
+    }
+
+
+    private void showFuelDialog() {
+        JSONObject data = MaintenanceStore.load(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(24, 12, 24, 12);
+        EditText eKm = new EditText(this); eKm.setHint("KM Saat Ini"); eKm.setInputType(InputType.TYPE_CLASS_NUMBER);
+        eKm.setText(String.valueOf(data.optInt("currentKm", 0)));
+        EditText eLit = new EditText(this); eLit.setHint("Jumlah Liter (misal 25.5)"); eLit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText ePrice = new EditText(this); ePrice.setHint("Total Harga Rp"); ePrice.setInputType(InputType.TYPE_CLASS_NUMBER);
+        box.addView(eKm); box.addView(eLit); box.addView(ePrice);
+        JSONArray flCur = data.optJSONArray("fuelLogs");
+        if (flCur != null && flCur.length() > 0) {
+            StringBuilder fsb = new StringBuilder("\n20 Catatan Terakhir:\n");
+            for (int i = flCur.length() - 1; i >= Math.max(0, flCur.length() - 20); i--) {
+                JSONObject fo = flCur.optJSONObject(i);
+                if (fo != null) fsb.append("• ").append(fo.optString("date", "")).append(" | ").append(MaintenanceStore.fmtKm(fo.optInt("km", 0))).append(" km | ").append(fo.optDouble("liters", 0)).append(" L | Rp").append(MaintenanceStore.fmtKm(fo.optInt("price", 0))).append("\n");
+            }
+            TextView ftv = new TextView(this);
+            ftv.setText(fsb.toString());
+            ftv.setTextSize(11);
+            box.addView(ftv);
+        }
+        ScrollView fsv = new ScrollView(this);
+        fsv.addView(box);
+        new AlertDialog.Builder(this)
+            .setTitle("Catat Isi BBM")
+            .setView(fsv)
+            .setPositiveButton("Simpan", (d, w) -> {
+                try {
+                    JSONArray fl = data.optJSONArray("fuelLogs");
+                    if (fl == null) { fl = new JSONArray(); data.put("fuelLogs", fl); }
+                    JSONObject o = new JSONObject();
+                    o.put("id", String.valueOf(System.currentTimeMillis()));
+                    o.put("date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
+                    o.put("km", parseInt(eKm.getText().toString(), 0));
+                    o.put("liters", Double.parseDouble(eLit.getText().toString().trim()));
+                    o.put("price", parseInt(ePrice.getText().toString(), 0));
+                    fl.put(o);
+                    MaintenanceStore.save(this, data);
+                    Toast.makeText(this, "BBM tersimpan", Toast.LENGTH_SHORT).show();
+                } catch (Throwable ignored) {}
+            })
+            .setNegativeButton("Batal", null)
+            .show();
+    }
+
+    private void showDocsDialog() {
+        JSONObject data = MaintenanceStore.load(this);
+        JSONArray docs = data.optJSONArray("documents");
+        if (docs == null) return;
+        String[] items = new String[docs.length()];
+        for (int i = 0; i < docs.length(); i++) {
+            JSONObject doc = docs.optJSONObject(i);
+            String due = doc.optString("dueDate", "");
+            items[i] = doc.optString("name", "") + " (" + (due.isEmpty() ? "Belum diisi" : due) + ")";
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Pengingat Dokumen (Tap untuk edit)")
+            .setItems(items, (d, idx) -> {
+                JSONObject doc = docs.optJSONObject(idx);
+                EditText et = new EditText(this);
+                et.setHint("YYYY-MM-DD (misal 2027-05-20)");
+                et.setText(doc.optString("dueDate", ""));
+                new AlertDialog.Builder(this)
+                    .setTitle(doc.optString("name", "Dokumen"))
+                    .setView(et)
+                    .setPositiveButton("Simpan", (d2, w2) -> {
+                        try {
+                            doc.put("dueDate", et.getText().toString().trim());
+                            MaintenanceStore.save(this, data);
+                            Toast.makeText(this, "Dokumen disimpan", Toast.LENGTH_SHORT).show();
+                        } catch (Throwable ignored) {}
+                    })
+                    .setNegativeButton("Batal", null)
+                    .show();
+            })
+            .setPositiveButton("Tutup", null)
+            .setNeutralButton("Atur Pengingat", (d, w) -> showReminderDaysDialog())
+            .show();
+    }
+
+    private void showReminderDaysDialog() {
+        JSONObject data = MaintenanceStore.load(this);
+        int[] opts = {30, 14, 7, 3, 2, 1, 0};
+        String[] labels = {"30 hari sebelum", "14 hari sebelum", "7 hari sebelum", "3 hari sebelum", "2 hari sebelum", "1 hari sebelum", "Hari-H (0 hari)"};
+        boolean[] checked = new boolean[opts.length];
+        JSONArray cur = data.optJSONArray("docReminderDays");
+        for (int i = 0; i < opts.length; i++) {
+            if (cur != null) {
+                for (int j = 0; j < cur.length(); j++) {
+                    if (cur.optInt(j, -1) == opts[i]) checked[i] = true;
+                }
+            }
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Pilih Jadwal Pengingat (Multiple)")
+            .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
+            .setPositiveButton("Simpan", (d, w) -> {
+                try {
+                    JSONArray arr = new JSONArray();
+                    for (int i = 0; i < opts.length; i++) if (checked[i]) arr.put(opts[i]);
+                    data.put("docReminderDays", arr);
+                    MaintenanceStore.save(this, data);
+                    Toast.makeText(this, "Jadwal pengingat disimpan", Toast.LENGTH_SHORT).show();
+                } catch (Throwable ignored) {}
+            })
+            .setNegativeButton("Batal", null)
             .show();
     }
 

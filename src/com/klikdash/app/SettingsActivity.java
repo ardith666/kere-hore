@@ -276,8 +276,8 @@ public class SettingsActivity extends Activity {
                 })));
 
         boolean maintW = MaintenanceStore.isWidgetEnabled(this);
-        list.addView(row("WIDGET SERVIS / MOVING PART",
-                "Tampilkan ringkasan jadwal servis terdekat di bawah jam/GPS pada halaman utama.",
+        list.addView(row("WIDGET INFO KENDARAAN",
+                "Tampilkan ringkasan jadwal servis, dokumen, BBM & analitik di bawah jam/GPS pada halaman utama.",
                 key(maintW ? "AKTIF" : "NONAKTIF", maintW, () -> {
                     try {
                         org.json.JSONObject d = MaintenanceStore.load(this);

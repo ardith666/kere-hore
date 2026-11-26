@@ -681,6 +681,8 @@ public class HomeActivity extends Activity {
     MediaController btCtrl;
     private int accentColor = AMBER;
     private TextView topTagView;
+    private TextView notifBannerView;
+    private boolean alertShownThisSession = false;
     private TextView maintWidgetView;
     private TextView maintSwotView;
     private LinearLayout maintWidgetRow;
@@ -694,47 +696,74 @@ public class HomeActivity extends Activity {
             topTagView.setText(MaintenanceStore.getCustomLabel(this).toUpperCase(java.util.Locale.US));
             topTagView.setTextColor(prefs.getInt("themeAccent", AMBER));
         }
+        java.util.List<String> alerts = MaintenanceStore.getAlerts(this);
+        if (notifBannerView != null) {
+            if (alerts.isEmpty()) {
+                notifBannerView.setVisibility(View.GONE);
+            } else {
+                notifBannerView.setText("⚠ " + alerts.size() + " SERVIS/DOK");
+                notifBannerView.setVisibility(View.VISIBLE);
+            }
+        }
+        if (!alerts.isEmpty() && !alertShownThisSession) {
+            alertShownThisSession = true;
+            showAlertsPopup(alerts);
+        }
         if (maintWidgetRow != null) {
             if (!MaintenanceStore.isWidgetEnabled(this)) {
                 maintWidgetRow.setVisibility(View.GONE);
                 return;
             }
             org.json.JSONObject data = MaintenanceStore.load(this);
-            java.util.List<org.json.JSONObject> parts = MaintenanceStore.getNearestParts(this, 3);
-            if (parts.isEmpty()) {
+            int cur = data.optInt("currentKm", 0);
+            java.util.List<String> urgent = new java.util.ArrayList<>();
+            for (String a : alerts) {
+                if (urgent.size() < 3) urgent.add("• " + a);
+            }
+            if (urgent.size() < 3) {
+                java.util.List<org.json.JSONObject> parts = MaintenanceStore.getNearestParts(this, 3);
+                for (org.json.JSONObject p : parts) {
+                    if (urgent.size() >= 3) break;
+                    int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
+                    if (rem > 0) urgent.add("• " + p.optString("name", "Part") + " (Sisa " + MaintenanceStore.fmtKm(rem) + " km)");
+                }
+            }
+            if (urgent.isEmpty()) {
                 maintWidgetRow.setVisibility(View.GONE);
                 return;
             }
-            int cur = data.optInt("currentKm", 0);
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < parts.size(); i++) {
-                org.json.JSONObject p = parts.get(i);
-                int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
+            for (int i = 0; i < urgent.size(); i++) {
                 if (i > 0) sb.append("\n");
-                sb.append("• ").append(p.optString("name", "Part")).append(" (Sisa ").append(MaintenanceStore.fmtKm(rem)).append(" km)");
+                sb.append(urgent.get(i));
             }
             maintWidgetView.setText(sb.toString());
 
             if (maintSwotView != null) {
                 org.json.JSONArray all = data.optJSONArray("parts");
+                org.json.JSONArray fuels = data.optJSONArray("fuelLogs");
                 int tot = all == null ? 0 : all.length();
-                int crit = 0, warn = 0;
-                if (all != null) {
-                    for (int i = 0; i < all.length(); i++) {
-                        org.json.JSONObject p = all.optJSONObject(i);
-                        if (p == null) continue;
-                        int rem = MaintenanceStore.effectiveTargetKm(p) - cur;
-                        if (rem <= 0) crit++;
-                        else if (rem <= 1000) warn++;
-                    }
-                }
-                String swot = "SWOT (" + tot + " Part)\n"
-                    + (crit > 0 ? "• Kritis: " + crit + " (Segera ganti)\n" : "• Semua part aman\n")
-                    + (warn > 0 ? "• Mendekati: " + warn + " part" : "• Jadwal terjaga");
+                int fuelCnt = fuels == null ? 0 : fuels.length();
+                int gpsCnt = TripLogger.load(this).length();
+                int crit = alerts.size();
+                String swot = (crit > 0 ? "• Perhatian: " + crit + " item mendesak\n" : "• Semua servis & dok aman\n")
+                    + "• Log GPS: " + gpsCnt + " titik\n"
+                    + "• BBM: " + fuelCnt + " catatan";
                 maintSwotView.setText(swot);
             }
             maintWidgetRow.setVisibility(View.VISIBLE);
         }
+    }
+
+    private void showAlertsPopup(java.util.List<String> alerts) {
+        StringBuilder sb = new StringBuilder();
+        for (String a : alerts) sb.append("• ").append(a).append("\n");
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Pengingat Servis & Dokumen")
+            .setMessage(sb.toString().trim())
+            .setPositiveButton("Selesaikan", (d, w) -> startActivity(new Intent(this, MaintenanceActivity.class)))
+            .setNegativeButton("Ingatkan Nanti", null)
+            .show();
     }
 
     ComponentName btListener() { return new ComponentName(getPackageName(), BtNowPlaying.class.getName()); }
@@ -1219,6 +1248,12 @@ public class HomeActivity extends Activity {
         top.addView(tmpv);
         boolean tempKnown = readCpuTemp() != null;
         if (!tempKnown) { tempIcon.setVisibility(View.GONE); tmpv.setVisibility(View.GONE); }
+        notifBannerView = text("", fMonoBold, 11, 0xFFFF3B30);
+        notifBannerView.setShadowLayer(8f, 0f, 0f, 0xFFFF3B30);
+        notifBannerView.setPadding(px(12), 0, px(4), 0);
+        notifBannerView.setVisibility(View.GONE);
+        notifBannerView.setOnClickListener(v -> showAlertsPopup(MaintenanceStore.getAlerts(this)));
+        top.addView(notifBannerView, new LinearLayout.LayoutParams(WRAP, WRAP));
         final Handler hmem = new Handler(getMainLooper());
         Runnable upd = new Runnable() {
             @Override public void run() {
@@ -1294,14 +1329,16 @@ public class HomeActivity extends Activity {
 
         maintWidgetView = new TextView(this);
         maintWidgetView.setTextColor(0xFFCBD5E1);
-        maintWidgetView.setTextSize(11);
-        maintWidgetView.setLineSpacing(px(2), 1f);
+        maintWidgetView.setTextSize(9.5f);
+        maintWidgetView.setMaxLines(3);
+        maintWidgetView.setLineSpacing(px(1), 1f);
         maintWidgetRow.addView(maintWidgetView, new LinearLayout.LayoutParams(0, WRAP, 1.35f));
 
         maintSwotView = new TextView(this);
         maintSwotView.setTextColor(0xFF94A3B8);
-        maintSwotView.setTextSize(11);
-        maintSwotView.setLineSpacing(px(2), 1f);
+        maintSwotView.setTextSize(9.5f);
+        maintSwotView.setMaxLines(3);
+        maintSwotView.setLineSpacing(px(1), 1f);
         maintSwotView.setPadding(px(16), 0, 0, 0);
         maintWidgetRow.addView(maintSwotView, new LinearLayout.LayoutParams(0, WRAP, 1f));
 

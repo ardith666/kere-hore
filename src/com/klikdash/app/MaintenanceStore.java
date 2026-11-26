@@ -28,6 +28,9 @@ public final class MaintenanceStore {
                 if (!obj.has("widgetEnabled")) obj.put("widgetEnabled", true);
                 if (!obj.has("autoSyncKm")) obj.put("autoSyncKm", true);
                 if (!obj.has("gpsMeters")) obj.put("gpsMeters", 0.0);
+                if (!obj.has("fuelLogs")) obj.put("fuelLogs", new JSONArray());
+                if (!obj.has("documents")) obj.put("documents", defaultDocs());
+                if (!obj.has("docReminderDays")) obj.put("docReminderDays", new JSONArray("[14,7,2,0]"));
                 if (!obj.has("parts")) obj.put("parts", defaultParts());
                 return obj;
             } catch (Throwable ignored) {}
@@ -39,6 +42,8 @@ public final class MaintenanceStore {
             def.put("widgetEnabled", true);
             def.put("autoSyncKm", true);
             def.put("gpsMeters", 0.0);
+            def.put("fuelLogs", new JSONArray());
+            def.put("documents", defaultDocs());
             def.put("parts", defaultParts());
             save(ctx, def);
         } catch (Throwable ignored) {}
@@ -151,6 +156,61 @@ public final class MaintenanceStore {
             }
         }
         return best != null ? best : parts.optJSONObject(0);
+    }
+
+    public static java.util.List<String> getAlerts(Context ctx) {
+        java.util.List<String> alerts = new java.util.ArrayList<>();
+        JSONObject data = load(ctx);
+        int cur = data.optInt("currentKm", 0);
+        if (cur > 0) {
+            JSONArray parts = data.optJSONArray("parts");
+            if (parts != null) {
+                for (int i = 0; i < parts.length(); i++) {
+                    JSONObject p = parts.optJSONObject(i);
+                    if (p == null) continue;
+                    int rem = effectiveTargetKm(p) - cur;
+                    if (rem <= 0) alerts.add("Servis: " + p.optString("name", "Part") + " (Lewat " + fmtKm(Math.abs(rem)) + " km)");
+                }
+            }
+        }
+        JSONArray docs = data.optJSONArray("documents");
+        JSONArray remDays = data.optJSONArray("docReminderDays");
+        int maxDay = 14;
+        if (remDays != null && remDays.length() > 0) {
+            maxDay = -1;
+            for (int i = 0; i < remDays.length(); i++) maxDay = Math.max(maxDay, remDays.optInt(i, 0));
+        }
+        if (docs != null && maxDay >= 0) {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < docs.length(); i++) {
+                JSONObject d = docs.optJSONObject(i);
+                if (d == null) continue;
+                String due = d.optString("dueDate", "").trim();
+                if (due.isEmpty()) continue;
+                try {
+                    long t = sdf.parse(due).getTime();
+                    long days = (t - now) / 86400000L;
+                    if (days <= maxDay) alerts.add("Dokumen: " + d.optString("name", "Doc") + " (" + (days <= 0 ? "Jatuh tempo!" : days + " hari lagi") + ")");
+                } catch (Throwable ignored) {}
+            }
+        }
+        return alerts;
+    }
+
+    private static JSONArray defaultDocs() {
+        JSONArray arr = new JSONArray();
+        String[] names = {"Pajak STNK Tahunan", "Pajak 5 Tahunan / Kaleng", "SIM A", "Asuransi Mobil"};
+        for (String nm : names) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("id", nm.toLowerCase().replace(" ", "-"));
+                o.put("name", nm);
+                o.put("dueDate", "");
+                arr.put(o);
+            } catch (Throwable ignored) {}
+        }
+        return arr;
     }
 
     private static JSONArray defaultParts() {
