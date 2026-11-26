@@ -26,6 +26,8 @@ public final class MaintenanceStore {
                 JSONObject obj = new JSONObject(new String(bos.toByteArray(), StandardCharsets.UTF_8));
                 if (!obj.has("customLabel")) obj.put("customLabel", DEFAULT_LABEL);
                 if (!obj.has("widgetEnabled")) obj.put("widgetEnabled", true);
+                if (!obj.has("autoSyncKm")) obj.put("autoSyncKm", true);
+                if (!obj.has("gpsMeters")) obj.put("gpsMeters", 0.0);
                 if (!obj.has("parts")) obj.put("parts", defaultParts());
                 return obj;
             } catch (Throwable ignored) {}
@@ -35,6 +37,8 @@ public final class MaintenanceStore {
             def.put("currentKm", 0);
             def.put("customLabel", DEFAULT_LABEL);
             def.put("widgetEnabled", true);
+            def.put("autoSyncKm", true);
+            def.put("gpsMeters", 0.0);
             def.put("parts", defaultParts());
             save(ctx, def);
         } catch (Throwable ignored) {}
@@ -49,6 +53,22 @@ public final class MaintenanceStore {
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    public static synchronized void addGpsDistanceMeters(Context ctx, double meters) {
+        if (meters <= 0) return;
+        JSONObject data = load(ctx);
+        if (!data.optBoolean("autoSyncKm", true)) return;
+        try {
+            double totalM = data.optDouble("gpsMeters", 0.0) + meters;
+            int addKm = (int) (totalM / 1000.0);
+            if (addKm > 0) {
+                data.put("currentKm", data.optInt("currentKm", 0) + addKm);
+                totalM = totalM % 1000.0;
+            }
+            data.put("gpsMeters", totalM);
+            save(ctx, data);
+        } catch (Throwable ignored) {}
     }
 
     public static synchronized void updateCurrentKm(Context ctx, int newKm) {

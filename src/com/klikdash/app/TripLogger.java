@@ -82,8 +82,10 @@ public final class TripLogger {
                 arr = new JSONArray();
             }
 
+            double movedMeters = (lastLoc != null) ? loc.distanceTo(lastLoc) : 0.0;
             lastLoc = new Location(loc);
             lastTimeMs = now;
+            if (movedMeters > 0) MaintenanceStore.addGpsDistanceMeters(ctx, movedMeters);
 
             JSONObject o = new JSONObject();
             o.put("tripId", currentTripId);
