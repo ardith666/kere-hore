@@ -356,6 +356,7 @@ public class MaintenanceActivity extends Activity {
         int total = parts == null ? 0 : parts.length();
         StringBuilder crit = new StringBuilder();
         StringBuilder warn = new StringBuilder();
+        int okCount = 0;
         if (parts != null) {
             for (int i = 0; i < parts.length(); i++) {
                 JSONObject p = parts.optJSONObject(i);
@@ -367,18 +368,35 @@ public class MaintenanceActivity extends Activity {
                 } else if (rem <= 1000) {
                     if (warn.length() > 0) warn.append(", ");
                     warn.append(p.optString("name", ""));
+                } else {
+                    okCount++;
                 }
             }
         }
-        String msg = "STRENGTHS:\n• " + total + " komponen terpantau aktif.\n\n"
+        int health = total > 0 ? Math.round((okCount * 100f) / total) : 100;
+        JSONArray fuels = data.optJSONArray("fuelLogs");
+        int fuelCnt = fuels == null ? 0 : fuels.length();
+        double totLit = 0;
+        int totFuelRp = 0;
+        if (fuels != null) {
+            for (int i = 0; i < fuels.length(); i++) {
+                JSONObject f = fuels.optJSONObject(i);
+                if (f != null) { totLit += f.optDouble("liters", 0); totFuelRp += f.optInt("price", 0); }
+            }
+        }
+        int gpsCnt = TripLogger.load(this).length();
+        String msg = "RINGKASAN ANALITIK:\n"
+            + "• Health Score: " + health + "%\n"
+            + "• Log BBM: " + fuelCnt + "x (" + String.format(java.util.Locale.US, "%.1f", totLit) + " L | Rp" + MaintenanceStore.fmtKm(totFuelRp) + ")\n"
+            + "• Log GPS: " + MaintenanceStore.fmtKm(gpsCnt) + " titik (" + TripLogger.getStorageSizeText(this) + ")\n\n"
+            + "STRENGTHS:\n• " + total + " komponen terpantau aktif.\n\n"
             + "WEAKNESSES:\n• " + (warn.length() > 0 ? "Mendekati jadwal: " + warn : "Tidak ada part mendekati batas.") + "\n\n"
             + "OPPORTUNITIES:\n• Jadwalkan servis gabungan agar lebih hemat waktu & biaya.\n\n"
             + "THREATS:\n• " + (crit.length() > 0 ? "SEGERA GANTI: " + crit : "Semua komponen masih dalam batas aman.");
         new AlertDialog.Builder(this)
-            .setTitle("Analisis SWOT & Insight")
+            .setTitle("Analitik & SWOT")
             .setMessage(msg)
             .setPositiveButton("Tutup", null)
-            .setNeutralButton("Atur Pengingat", (d, w) -> showReminderDaysDialog())
             .show();
     }
 
